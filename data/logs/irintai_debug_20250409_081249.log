@@ -1,0 +1,50 @@
+Log started at 2025-04-09 08:12:49.232408
+2025-04-09 08:12:49 [INFO] === Irintai Assistant Started ===
+2025-04-09 08:12:49 [INFO] Log file: data/logs/irintai_debug_20250409_081249.log
+Log started at 2025-04-09 08:12:49.234377
+2025-04-09 08:12:49 [INFO] === Irintai Assistant Started ===
+2025-04-09 08:12:49 [INFO] Log file: data/logs/irintai_debug_20250409_081249.log
+2025-04-09 08:12:49 [INFO] [Config] No configuration file found at data/config.json, using defaults
+2025-04-09 08:12:49 [INFO] [Environment] OLLAMA_HOME=data, OLLAMA_MODELS=data/models
+2025-04-09 08:12:49 [INFO] [Memory] Initializing memory system with model: all-MiniLM-L6-v2
+2025-04-09 08:12:49 [INFO] [Memory] Loading embedding model: all-MiniLM-L6-v2
+2025-04-09 08:12:50 [INFO] [Memory] Model loaded successfully
+2025-04-09 08:12:50 [INFO] [Memory] No index file found at data/vector_store/vector_store.json
+2025-04-09 08:12:50 [INFO] [Session] No previous session found
+2025-04-09 08:12:50 [INFO] [Memory Mode] Set to: Off
+2025-04-09 08:12:50 [INFO] [System Prompt] Applied: You are Irintai, a helpful and knowledgeable assistant.
+2025-04-09 08:12:51 [INFO] [Checking] Looking for installed models...
+2025-04-09 08:12:51 [ERROR] Unhandled exception in main: 'ConfigPanel' object has no attribute 'disk_frame'
+2025-04-09 08:12:51 [ERROR] Traceback (most recent call last):
+  File "f:\AI\Refour\ui\config_panel.py", line 600, in update_disk_space_info
+    self.disk_frame,
+AttributeError: 'ConfigPanel' object has no attribute 'disk_frame'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "f:\AI\Refour\irintai.py", line 108, in main
+    app = MainWindow(root)
+  File "f:\AI\Refour\ui\main_window.py", line 52, in __init__
+    self.initialize_ui()
+  File "f:\AI\Refour\ui\main_window.py", line 162, in initialize_ui
+    self.config_panel = ConfigPanel(
+  File "f:\AI\Refour\ui\config_panel.py", line 39, in __init__
+    self.initialize_ui()
+  File "f:\AI\Refour\ui\config_panel.py", line 51, in initialize_ui
+    self.create_model_settings()
+  File "f:\AI\Refour\ui\config_panel.py", line 218, in create_model_settings
+    self.update_disk_space_info()
+  File "f:\AI\Refour\ui\config_panel.py", line 610, in update_disk_space_info
+    self.disk_frame,
+AttributeError: 'ConfigPanel' object has no attribute 'disk_frame'
+
+2025-04-09 08:12:51 [INFO] [Found] 7 installed models
+2025-04-09 08:12:51 [INFO] [Fetching] Getting model list from Ollama repository...
+2025-04-09 08:12:51 [INFO] [Ollama Version] Unknown (Supports --all: False)
+2025-04-09 08:12:51 [INFO] [Fetching] Trying: ollama list --all
+2025-04-09 08:12:51 [INFO] [Warning] Command failed: ollama list --all: Error: unknown flag: --all
+
+2025-04-09 08:12:51 [INFO] [Fetching] Trying: ollama list remote
+2025-04-09 08:12:52 [INFO] [Error] Failed to fetch models: main thread is not in main loop
+2025-04-09 08:13:01 [ERROR] Error during cleanup: local variable 'app' referenced before assignment

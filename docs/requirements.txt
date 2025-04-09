@@ -1,0 +1,17 @@
+# Core dependencies
+torch>=1.9.0
+sentence-transformers>=2.2.2
+requests>=2.25.1
+psutil>=5.8.0
+
+# UI dependencies
+pillow>=9.0.0
+
+# File handling
+python-docx>=0.8.11
+PyPDF2>=2.0.0
+chardet>=4.0.0
+
+# Utilities
+tqdm>=4.61.0
+numpy>=1.20.0
