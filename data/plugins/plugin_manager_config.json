@@ -1,0 +1,16 @@
+{
+  "version": "1.0.0",
+  "auto_load_enabled": true,
+  "enabled_plugins": [],
+  "plugin_security": {
+    "sandbox_mode": true,
+    "resource_limits": {
+      "max_cpu_percent": 50,
+      "max_memory_mb": 256
+    }
+  },
+  "auto_update": {
+    "check_frequency_hours": 24,
+    "auto_install_updates": false
+  }
+}

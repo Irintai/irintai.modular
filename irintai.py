@@ -25,7 +25,8 @@ from core import (
     ModelManager, 
     ChatEngine, 
     MemorySystem, 
-    ConfigManager
+    ConfigManager,
+    PluginManager
 )
 
 # Import utility modules
@@ -105,36 +106,58 @@ def main():
     
     # Start the application
     try:
-        app = MainWindow(root)
+        # Initialize core components with proper dependencies
+        model_manager = ModelManager(
+            model_path="data/models", 
+            logger=logger.log,
+            use_8bit=False
+        )
+        
+        memory_system = MemorySystem()
+        config_manager = ConfigManager()
+        
+        # Create ChatEngine with model_manager dependency
+        chat_engine = ChatEngine(
+            model_manager=model_manager,
+            memory_system=memory_system,
+            session_file="data/chat_history.json",
+            logger=logger.log
+        )
+        
+        # Create plugin manager
+        plugin_manager = PluginManager(
+            plugin_dir="plugins",
+            config_dir="data/plugins",
+            logger=logger.log,
+            core_system=None  # Can be updated later if needed
+        )
+        
+        # Combine components in core_app dictionary
+        core_app = {
+            "model_manager": model_manager,
+            "chat_engine": chat_engine,
+            "memory_system": memory_system,
+            "config_manager": config_manager,
+            "plugin_manager": plugin_manager,
+            "logger": logger
+        }
+        
+        # Create main window with core_app
+        app = MainWindow(root, core_app=core_app)
         root.mainloop()
+        
     except Exception as e:
         # Log the exception
         logger.error(f"Unhandled exception in main: {e}")
         logger.error(traceback.format_exc())
         
-        # Show error dialog
-        import tkinter.messagebox as messagebox
-        error_msg = f"An error occurred while starting the application:\n\n{e}\n\nSee the log file for details."
-        messagebox.showerror("Error", error_msg)
-    finally:
-        # Clean up resources
+        # Show error dialog if UI is available
         try:
-            # Stop any running models
-            if hasattr(app, 'model_manager') and hasattr(app.model_manager, 'stop_model'):
-                if app.model_manager.model_process and app.model_manager.model_process.poll() is None:
-                    app.model_manager.stop_model()
-                    
-            # Save session and config
-            if hasattr(app, 'chat_engine') and hasattr(app.chat_engine, 'save_session'):
-                app.chat_engine.save_session()
-                
-            if hasattr(app, 'config_manager') and hasattr(app.config_manager, 'save_config'):
-                app.config_manager.save_config()
-                
-            # Log shutdown
-            logger.log("[System] Irintai Assistant shutting down")
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
+            import tkinter.messagebox as messagebox
+            error_msg = f"An error occurred:\n\n{e}\n\nSee log for details."
+            messagebox.showerror("Error", error_msg)
+        except:
+            pass
 
 if __name__ == "__main__":
     main()

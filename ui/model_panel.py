@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 from typing import Callable, Dict, List, Any, Optional
+import queue
 
 # Import model status constants
 from core.model_manager import MODEL_STATUS, RECOMMENDED_MODELS
@@ -38,6 +39,11 @@ class ModelPanel:
         # Create the main frame
         self.frame = ttk.Frame(parent)
         
+        # Create thread-safe queue for UI updates
+        self.update_queue = queue.Queue()
+        # Start queue processor
+        self.process_queue()
+
         # Initialize UI components
         self.initialize_ui()
         
@@ -296,14 +302,14 @@ class ModelPanel:
             # Fetch remote models
             all_models = self.model_manager.fetch_available_models()
             
-            # Update UI on main thread
-            self.frame.after(0, lambda: self._update_model_tree(all_models))
+            # Queue UI update instead of direct call
+            self.update_queue.put((self._update_model_tree, [all_models], {}))
         except Exception as e:
             self.log(f"[Error] Failed to fetch models: {e}")
-            self.frame.after(0, lambda: self.status_var.set(f"Error: {str(e)}"))
+            self.update_queue.put((self.status_var.set, [f"Error: {str(e)}"], {}))
         finally:
-            # Reset progress bar
-            self.frame.after(0, lambda: self._reset_progress_bar())
+            # Queue progress bar reset
+            self.update_queue.put((self._reset_progress_bar, [], {}))
             
     def _update_model_tree(self, models_list):
         """
@@ -799,3 +805,22 @@ class ModelPanel:
         except Exception as e:
             self.log(f"[Error] Cannot open model folder: {e}")
             messagebox.showerror("Error", f"Cannot open model folder: {e}")
+            
+    def process_queue(self):
+        """Process queued UI update requests from threads"""
+        try:
+            while True:
+                # Get task without waiting
+                task, args, kwargs = self.update_queue.get_nowait()
+                try:
+                    # Execute the task
+                    task(*args, **kwargs)
+                except Exception as e:
+                    self.log(f"[Error] Error in queued task: {e}")
+                self.update_queue.task_done()
+        except queue.Empty:
+            # Queue is empty, schedule next check
+            pass
+        finally:
+            # Schedule next queue check
+            self.frame.after(100, self.process_queue)

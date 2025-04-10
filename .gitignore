@@ -1,0 +1,59 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and databases
+data/logs/
+*.log
+*.sqlite
+*.db
+
+# AI model files (typically large)
+data/models/*
+!data/models/.gitkeep
+
+# Local chat history
+data/chat_history.json
+
+# User-specific data
+data/vector_store/*
+!data/vector_store/.gitkeep
+data/reflections/*
+!data/reflections/.gitkeep
+
+# Config files containing sensitive information
+# (uncomment if needed)
+# data/config.json
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# OS specific files
+.DS_Store
+Thumbs.db

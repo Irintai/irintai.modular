@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext
 import time
 import datetime
+import os
 from typing import Dict, List, Any, Optional, Callable
 
 class Dashboard:

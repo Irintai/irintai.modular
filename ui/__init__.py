@@ -8,6 +8,7 @@ from .model_panel import ModelPanel
 from .memory_panel import MemoryPanel
 from .config_panel import ConfigPanel
 from .log_viewer import LogViewer
+from .plugin_panel import PluginPanel
 
 __all__ = [
     'MainWindow',
@@ -16,4 +17,5 @@ __all__ = [
     'MemoryPanel',
     'ConfigPanel',
     'LogViewer'
+    'PluginPanel'
 ]

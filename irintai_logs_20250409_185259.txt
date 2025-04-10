@@ -1,0 +1,24 @@
+=== Irintai Console Log - 2025-04-09 18:52:59.464738 ===
+
+[Environment] OLLAMA_HOME=data, OLLAMA_MODELS=data/models
+[Session] Loaded 0 messages
+[Plugin Manager] Initialized with plugin directory: plugins
+[Memory Mode] Set to: Off
+[System Prompt] Applied: You are Irintai, a helpful and knowledgeable assistant.
+[Checking] Looking for installed models...
+[Found] 7 installed models
+[Fetching] Getting model list from Ollama repository...
+[Plugin Discovery] Found plugin: personality_plugin
+[Ollama Version] Unknown (Supports --all: False)
+[Fetching] Trying: ollama list --all
+[Warning] Command failed: ollama list --all: Error: unknown flag: --all
+
+[Fetching] Trying: ollama list remote
+[System] Irintai Assistant started
+[Plugin Error] Failed to load personality_plugin: cannot import name 'PersonalityPluginPanel' from 'plugins.personality_plugin.ui.panel' (f:\AI\irintai\plugins\personality_plugin\ui\panel.py)
+[Opened] Plugin folder: plugins
+Configuration loaded successfully
+Configuration saved successfully
+Personality Plugin initialized with profile: Standard
+[Plugin] Loaded: personality_plugin
+[Plugin] Activated: personality_plugin

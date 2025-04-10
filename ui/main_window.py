@@ -20,20 +20,26 @@ from .model_panel import ModelPanel
 from .config_panel import ConfigPanel
 from .log_viewer import LogViewer
 from .memory_panel import MemoryPanel
+from core.plugin_manager import PluginManager
+from ui.plugin_panel import PluginPanel
 
 class MainWindow:
     """Main application window for the Irintai assistant"""
     
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, core_app=None):
         """
         Initialize the main window
         
         Args:
             root: Tkinter root window
+            core_app: Dictionary containing core application components
         """
         self.root = root
         self.root.title("Irintai - Local AI Assistant")
         self.root.minsize(800, 600)
+        
+        # Store core_app reference
+        self.core_app = core_app or {}
         
         # Try to set the application icon
         try:
@@ -42,10 +48,10 @@ class MainWindow:
         except Exception:
             pass  # Ignore icon errors
         
-        # Initialize logger
+        # Initialize logger (use from core_app if available)
         self.initialize_logger()
         
-        # Initialize core components
+        # Initialize core components using core_app
         self.initialize_core_components()
         
         # Initialize UI components
@@ -62,49 +68,77 @@ class MainWindow:
         
     def initialize_logger(self):
         """Initialize the logger"""
-        self.logger = IrintaiLogger(
-            log_dir="data/logs",
-            latest_log_file="irintai_debug.log"
-        )
+        if "logger" in self.core_app:
+            self.logger = self.core_app["logger"]
+        else:
+            self.logger = IrintaiLogger(
+                log_dir="data/logs",
+                latest_log_file="irintai_debug.log"
+            )
         
     def initialize_core_components(self):
         """Initialize core application components"""
-        # Initialize configuration manager
-        self.config_manager = ConfigManager(
-            config_path="data/config.json",
-            logger=self.logger.log
-        )
+        # Use components from core_app if available, otherwise create new ones
         
-        # Initialize file operations utility
+        # Configuration manager
+        if "config_manager" in self.core_app:
+            self.config_manager = self.core_app["config_manager"]
+        else:
+            self.config_manager = ConfigManager(
+                config_path="data/config.json",
+                logger=self.logger.log
+            )
+        
+        # File operations utility
         self.file_ops = FileOps(logger=self.logger.log)
         
-        # Initialize system monitor
+        # System monitor
         self.system_monitor = SystemMonitor(logger=self.logger.log)
         
         # Get configuration values
-        self.model_path = self.config_manager.get("model_path")
-        self.use_8bit = self.config_manager.get("use_8bit")
+        self.model_path = self.config_manager.get("model_path", "data/models")
+        self.use_8bit = self.config_manager.get("use_8bit", False)
         
-        # Initialize model manager
-        self.model_manager = ModelManager(
-            model_path=self.model_path,
-            logger=self.logger.log,
-            use_8bit=self.use_8bit
-        )
+        # Model manager
+        if "model_manager" in self.core_app:
+            self.model_manager = self.core_app["model_manager"]
+        else:
+            self.model_manager = ModelManager(
+                model_path=self.model_path,
+                logger=self.logger.log,
+                use_8bit=self.use_8bit
+            )
         
-        # Initialize memory system
-        self.memory_system = MemorySystem(
-            index_path="data/vector_store/vector_store.json",
-            logger=self.logger.log
-        )
+        # Memory system
+        if "memory_system" in self.core_app:
+            self.memory_system = self.core_app["memory_system"]
+        else:
+            self.memory_system = MemorySystem(
+                index_path="data/vector_store/vector_store.json",
+                logger=self.logger.log
+            )
         
-        # Initialize chat engine
-        self.chat_engine = ChatEngine(
-            model_manager=self.model_manager,
-            memory_system=self.memory_system,
-            session_file="data/chat_history.json",
-            logger=self.logger.log
-        )
+        # Chat engine
+        if "chat_engine" in self.core_app:
+            self.chat_engine = self.core_app["chat_engine"]
+        else:
+            self.chat_engine = ChatEngine(
+                model_manager=self.model_manager,
+                memory_system=self.memory_system,
+                session_file="data/chat_history.json",
+                logger=self.logger.log
+            )
+        
+        # Plugin manager
+        if "plugin_manager" in self.core_app:
+            self.plugin_manager = self.core_app["plugin_manager"]
+        else:
+            self.plugin_manager = PluginManager(
+                plugin_dir="plugins",
+                config_dir="data/plugins",
+                logger=self.logger.log,
+                core_system=self
+            )
         
         # Set memory mode from config
         self.chat_engine.set_memory_mode(
@@ -170,6 +204,13 @@ class MainWindow:
         )
         self.notebook.add(self.config_panel.frame, text="Settings")
         
+        self.plugin_panel = PluginPanel(
+        self.notebook,
+        self.plugin_manager,
+        self.logger.log
+        )
+        self.notebook.add(self.plugin_panel.frame, text="Plugins")
+
         # Create status bar
         self.create_status_bar()
         
@@ -415,3 +456,14 @@ class MainWindow:
         
         # Destroy the root window
         self.root.destroy()
+
+        def cleanup_plugins():
+            """Deactivate all active plugins"""
+            plugins_info = self.plugin_manager.get_all_plugins()
+            for plugin_name, info in plugins_info.items():
+                if info["status"] == "Active":
+                    self.log(f"[Plugins] Deactivating plugin: {plugin_name}")
+                    self.plugin_manager.deactivate_plugin(plugin_name)
+
+        # Call plugin cleanup
+        cleanup_plugins()
