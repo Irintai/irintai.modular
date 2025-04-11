@@ -47,6 +47,40 @@ class MemoryPanel:
         # Create indexed documents section
         self.create_documents_section()
         
+        # Initialize plugin extensions
+        self.initialize_plugin_extensions()
+
+    def initialize_plugin_extensions(self):
+        """Initialize plugin extensions for the memory panel"""
+        # Dictionaries for storing plugin components
+        self.plugin_importers = {}  # Document importers
+        self.plugin_processors = {}  # Memory processors
+        self.plugin_exporters = {}  # Document exporters
+        self.plugin_ui_extensions = {}  # UI extensions
+        
+        # Create plugin extension frame (initially hidden)
+        self.plugin_frame = ttk.LabelFrame(self.frame, text="Plugin Extensions")
+        
+        # Register with plugin manager if available
+        if hasattr(self.parent, "plugin_manager"):
+            plugin_manager = self.parent.plugin_manager
+            
+            # Register for plugin events
+            plugin_manager.register_event_handler("memory_panel", "plugin_activated", 
+                                                 self.on_plugin_activated)
+            plugin_manager.register_event_handler("memory_panel", "plugin_deactivated", 
+                                                 self.on_plugin_deactivated)
+            plugin_manager.register_event_handler("memory_panel", "plugin_unloaded", 
+                                                 self.on_plugin_unloaded)
+            
+            # Get all active plugins and register their extensions
+            active_plugins = plugin_manager.get_active_plugins()
+            for plugin_id, plugin in active_plugins.items():
+                self.register_plugin_extension(plugin_id, plugin)
+                
+        # Update the import/export menus with plugin options
+        self.update_plugin_menus()
+        
     def create_memory_management(self):
         """Create the memory management section"""
         mgmt_frame = ttk.LabelFrame(self.frame, text="Memory Management")
@@ -756,4 +790,422 @@ class MemoryPanel:
             f"Removed {removed} chunks from '{source}' in the memory index."
         )
         
+    def register_plugin_extension(self, plugin_id, plugin):
+        """
+        Register plugin extensions for the memory panel
+        
+        Args:
+            plugin_id: Plugin identifier
+            plugin: Plugin instance
+        """
+        # Skip if plugin doesn't have memory extensions
+        if not hasattr(plugin, "get_memory_extensions"):
+            return
+            
+        try:
+            # Get extensions from plugin
+            extensions = plugin.get_memory_extensions()
+            
+            if not extensions or not isinstance(extensions, dict):
+                return
+                
+            # Register document importers
+            if "importers" in extensions and isinstance(extensions["importers"], dict):
+                for name, importer_func in extensions["importers"].items():
+                    if callable(importer_func):
+                        self.plugin_importers[f"{plugin_id}.{name}"] = importer_func
+                
+            # Register memory processors
+            if "processors" in extensions and isinstance(extensions["processors"], dict):
+                for processor_name, processor_func in extensions["processors"].items():
+                    if callable(processor_func):
+                        self.plugin_processors[f"{plugin_id}.{processor_name}"] = processor_func
+                        
+            # Register document exporters
+            if "exporters" in extensions and isinstance(extensions["exporters"], dict):
+                for exporter_name, exporter_func in extensions["exporters"].items():
+                    if callable(exporter_func):
+                        self.plugin_exporters[f"{plugin_id}.{exporter_name}"] = exporter_func
+            
+            # Register UI extensions
+            if "ui_extensions" in extensions and isinstance(extensions["ui_extensions"], list):
+                self.add_plugin_ui_extensions(plugin_id, extensions["ui_extensions"])
+                
+            # Update UI to reflect new extensions            
+            self.update_plugin_menus()
+            
+            self.log(f"[Memory] Registered extensions from plugin: {plugin_id}")
+            
+        except Exception as e:
+            self.log(f"[Memory] Error registering extensions from plugin {plugin_id}: {e}")
+
+    def unregister_plugin_extension(self, plugin_id):
+        """
+        Unregister plugin extensions
+        
+        Args:
+            plugin_id: Plugin identifier
+        """
+        # Remove importers
+        importers_to_remove = [k for k in self.plugin_importers if k.startswith(f"{plugin_id}.")]
+        for importer_id in importers_to_remove:
+            del self.plugin_importers[importer_id]
+        
+        # Remove processors
+        processors_to_remove = [k for k in self.plugin_processors if k.startswith(f"{plugin_id}.")]
+        for processor_id in processors_to_remove:
+            del self.plugin_processors[processor_id]
+        
+        # Remove exporters
+        exporters_to_remove = [k for k in self.plugin_exporters if k.startswith(f"{plugin_id}.")]
+        for exporter_id in exporters_to_remove:
+            del self.plugin_exporters[exporter_id]
+        
+        # Remove UI extensions
+        if plugin_id in self.plugin_ui_extensions:
+            for extension in self.plugin_ui_extensions[plugin_id]:
+                if extension.winfo_exists():
+                    extension.destroy()
+            del self.plugin_ui_extensions[plugin_id]
+        
+        # Update UI to reflect removed extensions
+        self.update_plugin_menus()
+        
+        # Hide plugin frame if no more extensions
+        if not any(self.plugin_ui_extensions.values()) and self.plugin_frame.winfo_ismapped():
+            self.plugin_frame.pack_forget()
+            
+        self.log(f"[Memory] Unregistered extensions from plugin: {plugin_id}")
+
+    def add_plugin_ui_extensions(self, plugin_id, extensions):
+        """
+        Add plugin UI extensions to the memory panel
+        
+        Args:
+            plugin_id: Plugin identifier
+            extensions: List of UI extension widgets
+        """
+        # Skip if no extensions
+        if not extensions:
+            return
+            
+        # Create container for this plugin if needed
+        if plugin_id not in self.plugin_ui_extensions:
+            self.plugin_ui_extensions[plugin_id] = []
+        
+        # Add each extension
+        for extension in extensions:
+            if isinstance(extension, tk.Widget):
+                # Add to plugin frame
+                extension.pack(in_=self.plugin_frame, fill=tk.X, padx=5, pady=2)
+                
+                # Add to our tracking list
+                self.plugin_ui_extensions[plugin_id].append(extension)
+        
+        # Show the plugin frame if not already visible
+        if not self.plugin_frame.winfo_ismapped() and any(self.plugin_ui_extensions.values()):
+            self.plugin_frame.pack(fill=tk.X, padx=10, pady=10, before=self.frame.winfo_children()[1])
+
+    def on_plugin_activated(self, plugin_id, plugin_instance):
+        """
+        Handle plugin activation event
+        
+        Args:
+            plugin_id: ID of activated plugin
+            plugin_instance: Plugin instance
+        """
+        # Register memory extensions for newly activated plugin
+        self.register_plugin_extension(plugin_id, plugin_instance)
+
+    def on_plugin_deactivated(self, plugin_id):
+        """
+        Handle plugin deactivation event
+        
+        Args:
+            plugin_id: ID of deactivated plugin
+        """
+        # Unregister memory extensions
+        self.unregister_plugin_extension(plugin_id)
+
+    def on_plugin_unloaded(self, plugin_id):
+        """
+        Handle plugin unloading event
+        
+        Args:
+            plugin_id: ID of unloaded plugin
+        """
+        # Ensure extensions are unregistered
+        self.unregister_plugin_extension(plugin_id)
+        
+    def run_plugin_importer(self, importer_id):
+        """
+        Run a plugin importer
+        
+        Args:
+            importer_id: ID of the importer to run
+        """
+        if importer_id not in self.plugin_importers:
+            messagebox.showerror("Error", f"Importer {importer_id} not found")
+            return
+            
+        try:
+            # Get the importer function
+            importer_func = self.plugin_importers[importer_id]
+            
+            # Run the importer - should return a dictionary with at least:
+            # - 'content': The text content to index
+            # - 'source': Source name for the content
+            # May also include:
+            # - 'metadata': Additional metadata dict
+            import_result = importer_func(self.window)
+            
+            if not import_result:
+                # User probably cancelled
+                return
+                
+            if not isinstance(import_result, dict) or 'content' not in import_result or 'source' not in import_result:
+                messagebox.showerror("Import Error", "Invalid data returned by importer")
+                return
+                
+            # Get the content and source
+            content = import_result['content']
+            source = import_result['source']
+            metadata = import_result.get('metadata', {})
+            
+            if not content.strip():
+                messagebox.showinfo("Import", "No content to import")
+                return
+                
+            # Add to memory
+            success = self.memory_system.add_text_to_index(content, source, metadata)
+            
+            if success:
+                # Refresh stats
+                self.refresh_stats()
+                
+                # Show confirmation
+                messagebox.showinfo(
+                    "Import Complete",
+                    f"Successfully imported content from {source}"
+                )
+                
+                self.log(f"[Memory] Imported content from {source}")
+            else:
+                messagebox.showerror(
+                    "Import Error",
+                    "Failed to import content"
+                )
+                
+        except Exception as e:
+            messagebox.showerror("Import Error", str(e))
+            self.log(f"[Memory] Error during import: {e}")
+
+    def run_plugin_exporter(self, exporter_id):
+        """
+        Run a plugin exporter
+        
+        Args:
+            exporter_id: ID of the exporter to run
+        """
+        if exporter_id not in self.plugin_exporters:
+            messagebox.showerror("Error", f"Exporter {exporter_id} not found")
+            return
+            
+        try:
+            # Get the exporter function
+            exporter_func = self.plugin_exporters[exporter_id]
+            
+            # Run the exporter with access to memory system and parent window
+            result = exporter_func(self.memory_system, self.window)
+            
+            # Show result if provided
+            if result and isinstance(result, str):
+                messagebox.showinfo("Export Complete", result)
+                
+            self.log(f"[Memory] Ran exporter {exporter_id}")
+                
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+            self.log(f"[Memory] Error during export: {e}")
+
+    def import_clipboard(self):
+        """Import text from clipboard"""
+        # Get clipboard content
+        clipboard_text = self.frame.clipboard_get()
+        
+        if not clipboard_text.strip():
+            messagebox.showinfo("Import", "Clipboard is empty")
+            return
+            
+        # Show source dialog
+        source = tk.simpledialog.askstring(
+            "Import from Clipboard",
+            "Enter source name for this content:",
+            parent=self.frame
+        )
+        
+        if not source:
+            return
+            
+        # Add to memory
+        success = self.memory_system.add_text_to_index(clipboard_text, source)
+        
+        if success:
+            # Refresh stats
+            self.refresh_stats()
+            
+            # Show confirmation
+            messagebox.showinfo(
+                "Import Complete",
+                f"Successfully imported clipboard content as '{source}'"
+            )
+        else:
+            messagebox.showerror(
+                "Import Error",
+                "Failed to import clipboard content"
+            )
+
+    def import_url(self):
+        """Import content from a URL"""
+        import requests
+        from bs4 import BeautifulSoup
+        
+        # Show URL dialog
+        url = tk.simpledialog.askstring(
+            "Import from URL",
+            "Enter URL to import:",
+            parent=self.frame
+        )
+        
+        if not url:
+            return
+            
+        # Add http:// if missing
+        if not url.startswith("http"):
+            url = "https://" + url
+            
+        try:
+            # Show progress dialog
+            progress_window = tk.Toplevel(self.frame)
+            progress_window.title("Loading URL")
+            progress_window.geometry("300x100")
+            progress_window.transient(self.frame)
+            progress_window.grab_set()
+            
+            ttk.Label(
+                progress_window,
+                text=f"Loading content from:\n{url}",
+                wraplength=280
+            ).pack(pady=10)
+            
+            progress_bar = ttk.Progressbar(
+                progress_window,
+                mode="indeterminate"
+            )
+            progress_bar.pack(fill=tk.X, padx=20, pady=10)
+            progress_bar.start(10)
+            progress_window.update()
+            
+            # Function to load in background
+            def load_url():
+                try:
+                    # Fetch URL content
+                    response = requests.get(url, timeout=15)
+                    response.raise_for_status()
+                    
+                    # Parse HTML
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Get text content
+                    content = soup.get_text(separator='\n', strip=True)
+                    
+                    # Get title as source name
+                    title = soup.title.string if soup.title else url
+                    
+                    # Add to memory
+                    success = self.memory_system.add_text_to_index(
+                        content, 
+                        title,
+                        {"url": url, "source_type": "web_page"}
+                    )
+                    
+                    # Close progress window
+                    progress_window.destroy()
+                    
+                    if success:
+                        # Refresh stats
+                        self.refresh_stats()
+                        
+                        # Show confirmation
+                        messagebox.showinfo(
+                            "Import Complete",
+                            f"Successfully imported content from {title}"
+                        )
+                        
+                        self.log(f"[Memory] Imported URL: {url}")
+                    else:
+                        messagebox.showerror(
+                            "Import Error",
+                            "Failed to import URL content"
+                        )
+                except Exception as e:
+                    # Close progress window
+                    progress_window.destroy()
+                    messagebox.showerror("Import Error", str(e))
+                    self.log(f"[Memory] Error importing URL: {e}")
+                    
+            threading.Thread(target=load_url, daemon=True).start()
+            
+        except Exception as e:
+            messagebox.showerror("Import Error", str(e))
+            self.log(f"[Memory] Error importing URL: {e}")
+
+    def export_metadata(self):
+        """Export memory index metadata"""
+        # Open file dialog
+        filename = filedialog.asksaveasfilename(
+            title="Export Memory Metadata",
+            defaultextension=".json",
+            filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+        )
+        
+        if not filename:
+            return
+            
+        try:
+            import json
+            
+            # Get metadata
+            metadata = {
+                "index_path": self.memory_system.index_path,
+                "document_count": len(self.memory_system.documents),
+                "last_updated": self.memory_system.last_updated,
+                "sources": {}
+            }
+            
+            # Group documents by source
+            for doc in self.memory_system.documents:
+                source = doc.get("source", "Unknown")
+                if source in metadata["sources"]:
+                    metadata["sources"][source]["chunk_count"] += 1
+                else:
+                    metadata["sources"][source] = {
+                        "chunk_count": 1,
+                        "file_type": os.path.splitext(source)[1] if "." in source else "Unknown",
+                        "timestamp": doc.get("timestamp", "Unknown")
+                    }
+            
+            # Save to file
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2)
+                
+            messagebox.showinfo(
+                "Export Complete",
+                f"Memory index metadata exported to {filename}"
+            )
+            
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+            self.log(f"[Memory] Error exporting metadata: {e}")
+            
 import os  # Import needed for path operations

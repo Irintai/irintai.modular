@@ -7,7 +7,7 @@ import subprocess
 import threading
 import re
 import time
-from typing import Dict, List, Optional, Callable, Tuple
+from typing import Dict, List, Optional, Callable, Tuple, Any
 
 # Model status constants
 MODEL_STATUS = {
@@ -35,7 +35,7 @@ RECOMMENDED_MODELS = {
 class ModelManager:
     """Manages Ollama models: installation, running, and status tracking"""
     
-    def __init__(self, model_path: str, logger: Callable, use_8bit: bool = False):
+    def __init__(self, model_path: str, logger: Callable, use_8bit: bool = False, config=None):
         """
         Initialize the model manager
         
@@ -43,10 +43,12 @@ class ModelManager:
             model_path: Path to store Ollama models
             logger: Logging function
             use_8bit: Whether to use 8-bit quantization
+            config: Optional configuration manager
         """
         self.model_path = model_path
         self.log = logger
         self.use_8bit = use_8bit
+        self.config = config
         self.model_statuses = {}  # Track model status
         self.current_model = None
         self.model_process = None
@@ -758,3 +760,302 @@ class ModelManager:
             info["free_space_gb"] = -1
         
         return info
+    
+    def get_current_model_format(self) -> str:
+        """
+        Get the format of the currently running model
+        
+        Returns:
+            String identifier of the model format (chatml, llama, etc.)
+        """
+        if not self.current_model:
+            return "default"
+            
+        # Check model name to guess format
+        model_name = self.current_model.lower()
+        
+        # Determine format based on model name
+        if any(name in model_name for name in ["gpt", "claude", "chatgpt", "deepseek"]):
+            return "chatml"
+        elif any(name in model_name for name in ["llama", "mistral", "mixtral", "alpaca"]):
+            return "llama"
+        elif any(name in model_name for name in ["starcoder", "codellama"]):
+            return "coder"
+        
+        # Default to a simple format for other models
+        return "default"
+
+    def get_model_details(self, model_name: str) -> Dict[str, Any]:
+        """
+        Get detailed information about a specific model
+        
+        Args:
+            model_name: Name of the model
+            
+        Returns:
+            Dictionary of model details
+        """
+        details = {
+            "name": model_name,
+            "status": self.model_statuses.get(model_name, MODEL_STATUS["NOT_INSTALLED"]),
+            "is_current": model_name == self.current_model,
+        }
+        
+        # Add recommended model info if available
+        if model_name in RECOMMENDED_MODELS:
+            details.update(RECOMMENDED_MODELS[model_name])
+        
+        # Try to get model size from filesystem
+        try:
+            model_dir = os.path.join(self.model_path, model_name)
+            if os.path.exists(model_dir):
+                # Calculate directory size
+                total_size = 0
+                for dirpath, dirnames, filenames in os.walk(model_dir):
+                    for f in filenames:
+                        fp = os.path.join(dirpath, f)
+                        total_size += os.path.getsize(fp)
+                
+                # Convert to GB
+                details["size_gb"] = round(total_size / (1024**3), 2)
+        except Exception as e:
+            self.log(f"[Warning] Could not get model size: {e}")
+        
+        return details
+
+    def get_model_parameters(self, model_name: str) -> Dict[str, Any]:
+        """
+        Get available parameters for a model
+        
+        Args:
+            model_name: Name of the model
+            
+        Returns:
+            Dictionary of parameters
+        """
+        params = {
+            "temperature": 0.7,
+            "top_p": 0.9,
+            "top_k": 40,
+            "repeat_penalty": 1.1,
+        }
+        
+        # Adjust default parameters based on model type
+        if "code" in model_name.lower() or "coder" in model_name.lower():
+            # Better defaults for code generation
+            params["temperature"] = 0.3
+            params["repeat_penalty"] = 1.2
+        elif any(creative in model_name.lower() for creative in ["creative", "novel", "story"]):
+            # More creative defaults
+            params["temperature"] = 0.9
+            params["top_p"] = 0.95
+        
+        return params
+
+    def set_model_parameters(self, params: Dict[str, Any]) -> bool:
+        """
+        Set parameters for the current model
+        
+        Args:
+            params: Dictionary of parameter key-value pairs
+            
+        Returns:
+            True if parameters were set successfully, False otherwise
+        """
+        if not self.current_model:
+            self.log("[Error] No model is currently running")
+            return False
+        
+        try:
+            # Log the parameter update
+            valid_params = {}
+            for key, value in params.items():
+                # Validate parameter values
+                if key == "temperature":
+                    valid_params[key] = max(0.0, min(2.0, float(value)))
+                elif key in ["top_p", "top_k", "repeat_penalty"]:
+                    valid_params[key] = max(0.0, float(value))
+                else:
+                    # Skip unknown parameters
+                    self.log(f"[Warning] Unknown parameter: {key}")
+                    continue
+                    
+                self.log(f"[Parameters] {key} = {valid_params[key]}")
+            
+            # Store parameters for future reference
+            self.current_parameters = valid_params
+            return True
+        except Exception as e:
+            self.log(f"[Error] Failed to set parameters: {e}")
+            return False
+
+    def export_model_config(self, path: str) -> bool:
+        """
+        Export model configurations to a file
+        
+        Args:
+            path: Path to save configuration file
+            
+        Returns:
+            True if exported successfully, False otherwise
+        """
+        try:
+            # Collect configuration data
+            config = {
+                "model_path": self.model_path,
+                "use_8bit": self.use_8bit,
+                "current_model": self.current_model,
+                "models": {},
+            }
+            
+            # Add information about each known model
+            for model_name, status in self.model_statuses.items():
+                config["models"][model_name] = {
+                    "status": status,
+                    "recommended": model_name in RECOMMENDED_MODELS,
+                }
+                
+                # Add recommended model metadata if available
+                if model_name in RECOMMENDED_MODELS:
+                    config["models"][model_name].update(RECOMMENDED_MODELS[model_name])
+            
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            
+            # Save to file
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
+                
+            self.log(f"[Config] Exported model configuration to {path}")
+            return True
+            
+        except Exception as e:
+            self.log(f"[Error] Failed to export model configuration: {e}")
+            return False
+
+    def import_model_config(self, path: str) -> bool:
+        """
+        Import model configurations from a file
+        
+        Args:
+            path: Path to configuration file
+            
+        Returns:
+            True if imported successfully, False otherwise
+        """
+        if not os.path.exists(path):
+            self.log(f"[Error] Configuration file not found: {path}")
+            return False
+            
+        try:
+            # Load from file
+            with open(path, "r", encoding="utf-8") as f:
+                config = json.load(f)
+                
+            # Update model path if specified
+            if "model_path" in config and config["model_path"] != self.model_path:
+                self.update_model_path(config["model_path"])
+                
+            # Update 8-bit setting
+            if "use_8bit" in config:
+                self.use_8bit = config["use_8bit"]
+                
+            # Refresh model status information if provided
+            if "models" in config:
+                for model_name, model_info in config["models"].items():
+                    if "status" in model_info:
+                        status = model_info["status"]
+                        # Only update if the status indicates the model is installed
+                        if status == MODEL_STATUS["INSTALLED"]:
+                            # Verify model is actually installed
+                            if self.verify_model_status(model_name):
+                                self._update_model_status(model_name, status)
+            
+            self.log(f"[Config] Imported model configuration from {path}")
+            return True
+            
+        except Exception as e:
+            self.log(f"[Error] Failed to import model configuration: {e}")
+            return False
+        
+    def chat_stream(self, prompt: str, format_function: Callable, 
+                   callback: Callable[[str, str], None]) -> bool:
+        """
+        Send a prompt to the model and stream back the response
+        
+        Args:
+            prompt: Prompt to send
+            format_function: Function to format the prompt for the model
+            callback: Function to call with chunks of the response
+            
+        Returns:
+            True if chat completed successfully, False otherwise
+        """
+        if not self.model_process or self.model_process.poll() is not None:
+            self.log("[Error] Model is not running")
+            callback("error", "Model is not running")
+            return False
+        
+        # Update status to generating
+        model_name = self.current_model
+        self._update_model_status(model_name, MODEL_STATUS["GENERATING"])
+        
+        try:
+            # Format the prompt
+            formatted = format_function(prompt)
+            
+            # Format the input properly
+            input_text = formatted + "\n"
+            
+            # Write to stdin and flush immediately
+            self.model_process.stdin.write(input_text)
+            self.model_process.stdin.flush()
+            
+            # Create a thread for reading the response
+            def read_response():
+                response_buffer = ""
+                
+                try:
+                    while True:
+                        if self.model_process.poll() is not None:
+                            # Process ended unexpectedly
+                            callback("error", "Model process terminated unexpectedly")
+                            break
+                            
+                        line = self.model_process.stdout.readline()
+                        if not line:
+                            time.sleep(0.1)
+                            continue
+                            
+                        # Clean the line
+                        chunk = line.strip()
+                        if not chunk:
+                            continue
+                            
+                        # Check if response is complete
+                        if "> " in chunk or "▌" in chunk:
+                            # Send final complete flag
+                            callback("complete", response_buffer.strip())
+                            break
+                            
+                        # Add to buffer and send the chunk
+                        response_buffer += chunk + "\n"
+                        callback("chunk", chunk)
+                        
+                    # Update status when done
+                    self._update_model_status(model_name, MODEL_STATUS["RUNNING"])
+                    
+                except Exception as e:
+                    self.log(f"[Stream Error] {e}")
+                    callback("error", str(e))
+                    self._update_model_status(model_name, MODEL_STATUS["ERROR"])
+            
+            # Start the response thread
+            threading.Thread(target=read_response, daemon=True).start()
+            return True
+            
+        except Exception as e:
+            self.log(f"[Chat Error] {e}")
+            self._update_model_status(model_name, MODEL_STATUS["ERROR"])
+            callback("error", str(e))
+            return False

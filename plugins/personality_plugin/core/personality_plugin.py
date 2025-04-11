@@ -846,6 +846,335 @@ class PersonalityPlugin:
             "initialization_time": self._state["initialization_time"]
         }
     
+    def analyze_message_style(self, message: str) -> Dict[str, float]:
+        """
+        Analyze a message to determine its style characteristics
+        
+        Args:
+            message: Message to analyze
+            
+        Returns:
+            Dictionary of style characteristics and their scores
+        """
+        try:
+            # Initialize style metrics
+            style = {
+                "formality": 0.5,
+                "complexity": 0.5,
+                "empathy": 0.5,
+                "directness": 0.5,
+                "creativity": 0.5
+            }
+            
+            # Word count and sentence length are indicators of complexity
+            words = message.split()
+            word_count = len(words)
+            avg_word_length = sum(len(word) for word in words) / max(1, word_count)
+            sentences = message.split('.')
+            avg_sentence_length = word_count / max(1, len(sentences))
+            
+            # Calculate complexity based on word and sentence length
+            if avg_word_length > 6:
+                style["complexity"] = min(1.0, 0.5 + (avg_word_length - 6) * 0.1)
+            elif avg_word_length < 4:
+                style["complexity"] = max(0.0, 0.5 - (4 - avg_word_length) * 0.1)
+                
+            if avg_sentence_length > 20:
+                style["complexity"] = min(1.0, style["complexity"] + 0.1)
+            
+            # Check for formal language indicators
+            formal_indicators = ["therefore", "however", "thus", "consequently", "furthermore", 
+                                "nevertheless", "accordingly", "moreover", "hereby"]
+            informal_indicators = ["anyway", "plus", "btw", "like", "sort of", "kind of", 
+                                  "you know", "stuff", "things"]
+            
+            # Count formal and informal indicators
+            formal_count = sum(1 for word in formal_indicators if word in message.lower())
+            informal_count = sum(1 for word in informal_indicators if word in message.lower())
+            
+            # Calculate formality score
+            if formal_count > informal_count:
+                style["formality"] = min(1.0, 0.5 + 0.1 * formal_count)
+            elif informal_count > formal_count:
+                style["formality"] = max(0.0, 0.5 - 0.1 * informal_count)
+            
+            # Check for empathetic language
+            empathy_indicators = ["feel", "understand", "appreciate", "sorry", "concern", 
+                                 "care", "support", "help", "listen"]
+            empathy_count = sum(1 for word in empathy_indicators if word in message.lower())
+            style["empathy"] = min(1.0, 0.5 + 0.05 * empathy_count)
+            
+            # Check for direct language
+            if "?" in message:
+                style["directness"] += 0.1
+                
+            direct_starts = ["please", "you should", "do this", "i need", "you must"]
+            if any(message.lower().startswith(start) for start in direct_starts):
+                style["directness"] = min(1.0, style["directness"] + 0.2)
+            
+            # Creative language often uses metaphors, varied vocabulary, etc.
+            # This is an approximation - true creativity analysis would require more sophisticated NLP
+            unique_words = len(set(word.lower() for word in words))
+            vocabulary_ratio = unique_words / max(1, word_count)
+            style["creativity"] = min(1.0, 0.3 + vocabulary_ratio * 0.7)
+            
+            return style
+            
+        except Exception as e:
+            self._logger(f"Error analyzing message style: {e}", "ERROR")
+            return {"formality": 0.5, "complexity": 0.5, "empathy": 0.5, 
+                    "directness": 0.5, "creativity": 0.5}
+    
+    def find_similar_profiles(self, style_metrics: Dict[str, float], limit: int = 3) -> List[str]:
+        """
+        Find profiles with similar style to the given metrics
+        
+        Args:
+            style_metrics: Dictionary of style characteristics and scores
+            limit: Maximum number of profiles to return
+            
+        Returns:
+            List of similar profile names, sorted by similarity
+        """
+        try:
+            profiles = self._config.get("profiles", {})
+            
+            # Calculate similarity score for each profile
+            similarities = []
+            
+            for name, profile in profiles.items():
+                profile_style = profile.get("style_modifiers", {})
+                
+                # Skip profiles without style information
+                if not profile_style:
+                    continue
+                    
+                # Calculate Euclidean distance for style metrics that exist in both
+                distance_squared = 0
+                common_metrics = 0
+                
+                for metric, value in style_metrics.items():
+                    if metric in profile_style:
+                        distance_squared += (value - profile_style[metric]) ** 2
+                        common_metrics += 1
+                
+                # Skip if no common metrics found
+                if common_metrics == 0:
+                    continue
+                    
+                # Calculate similarity (inverse of normalized distance)
+                distance = (distance_squared / common_metrics) ** 0.5
+                similarity = max(0, 1 - distance)
+                
+                similarities.append((name, similarity))
+            
+            # Sort by similarity (descending)
+            similarities.sort(key=lambda x: x[1], reverse=True)
+            
+            # Return top N profile names
+            return [name for name, _ in similarities[:limit]]
+            
+        except Exception as e:
+            self._logger(f"Error finding similar profiles: {e}", "ERROR")
+            return []
+    
+    def generate_profile_from_description(self, name: str, description: str) -> bool:
+        """
+        Generate a new profile based on a text description
+        
+        Args:
+            name: Name for the new profile
+            description: Description of the desired personality
+            
+        Returns:
+            Success flag
+        """
+        try:
+            # Check if name already exists
+            if name in self._config.get("profiles", {}):
+                self._logger(f"Profile '{name}' already exists", "ERROR")
+                return False
+                
+            # Extract keywords from description for tags
+            keywords = ["professional", "friendly", "technical", "creative", "formal", "casual",
+                       "helpful", "concise", "detailed", "empathetic", "analytical"]
+            
+            tags = [keyword for keyword in keywords if keyword.lower() in description.lower()]
+            
+            # Set style modifiers based on description
+            style_modifiers = {
+                "formality": 0.5,
+                "creativity": 0.5,
+                "complexity": 0.5,
+                "empathy": 0.5,
+                "directness": 0.5
+            }
+            
+            # Simple rule-based adjustments
+            if any(word in description.lower() for word in ["formal", "professional", "academic"]):
+                style_modifiers["formality"] = 0.8
+            if any(word in description.lower() for word in ["casual", "friendly", "relaxed"]):
+                style_modifiers["formality"] = 0.3
+                
+            if any(word in description.lower() for word in ["creative", "imaginative", "artistic"]):
+                style_modifiers["creativity"] = 0.8
+            if any(word in description.lower() for word in ["precise", "exact", "accurate"]):
+                style_modifiers["creativity"] = 0.2
+                
+            if any(word in description.lower() for word in ["complex", "sophisticated", "nuanced"]):
+                style_modifiers["complexity"] = 0.8
+            if any(word in description.lower() for word in ["simple", "clear", "straightforward"]):
+                style_modifiers["complexity"] = 0.2
+                
+            if any(word in description.lower() for word in ["empathetic", "caring", "supportive"]):
+                style_modifiers["empathy"] = 0.8
+            if any(word in description.lower() for word in ["analytical", "logical", "objective"]):
+                style_modifiers["empathy"] = 0.2
+                
+            if any(word in description.lower() for word in ["direct", "straightforward", "blunt"]):
+                style_modifiers["directness"] = 0.8
+            if any(word in description.lower() for word in ["indirect", "diplomatic", "subtle"]):
+                style_modifiers["directness"] = 0.2
+                
+            # Create new profile
+            profile_data = {
+                "name": name,
+                "description": description,
+                "tags": tags,
+                "author": "Auto-generated",
+                "version": "1.0.0",
+                "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "prefix": "",
+                "suffix": "",
+                "style_modifiers": style_modifiers,
+                "formatting": {
+                    "emphasize_key_points": "emphasis" in description.lower(),
+                    "use_markdown": True,
+                    "paragraph_structure": "standard"
+                }
+            }
+            
+            # Add the profile
+            return self.create_profile(profile_data)
+            
+        except Exception as e:
+            self._logger(f"Failed to generate profile: {e}", "ERROR")
+            return False
+        
+    def blend_profiles(self, name1: str, name2: str, blend_name: str, 
+                      weight1: float = 0.5) -> bool:
+        """
+        Create a new profile by blending two existing profiles
+        
+        Args:
+            name1: First profile name
+            name2: Second profile name
+            blend_name: Name for the new blended profile
+            weight1: Weight for the first profile (0.0-1.0)
+            
+        Returns:
+            Success flag
+        """
+        try:
+            profiles = self._config.get("profiles", {})
+            
+            # Check if profiles exist
+            if name1 not in profiles:
+                self._logger(f"Profile '{name1}' not found", "ERROR")
+                return False
+                
+            if name2 not in profiles:
+                self._logger(f"Profile '{name2}' not found", "ERROR")
+                return False
+                
+            # Check if blend name already exists
+            if blend_name in profiles:
+                self._logger(f"Profile '{blend_name}' already exists", "ERROR")
+                return False
+                
+            # Get profiles
+            profile1 = profiles[name1]
+            profile2 = profiles[name2]
+            
+            # Calculate weight for second profile
+            weight2 = 1.0 - weight1
+            
+            # Create blended style modifiers
+            style1 = profile1.get("style_modifiers", {})
+            style2 = profile2.get("style_modifiers", {})
+            
+            blended_style = {}
+            
+            # Blend all style modifiers found in either profile
+            all_modifiers = set(list(style1.keys()) + list(style2.keys()))
+            for modifier in all_modifiers:
+                value1 = style1.get(modifier, 0.5)
+                value2 = style2.get(modifier, 0.5)
+                blended_style[modifier] = value1 * weight1 + value2 * weight2
+            
+            # Blend text elements
+            blended_prefix = ""
+            if profile1.get("prefix", "") and profile2.get("prefix", ""):
+                if weight1 > weight2:
+                    blended_prefix = profile1.get("prefix", "")
+                else:
+                    blended_prefix = profile2.get("prefix", "")
+            else:
+                blended_prefix = profile1.get("prefix", "") or profile2.get("prefix", "")
+                
+            blended_suffix = ""
+            if profile1.get("suffix", "") and profile2.get("suffix", ""):
+                if weight1 > weight2:
+                    blended_suffix = profile1.get("suffix", "")
+                else:
+                    blended_suffix = profile2.get("suffix", "")
+            else:
+                blended_suffix = profile1.get("suffix", "") or profile2.get("suffix", "")
+            
+            # Create blended formatting preferences
+            format1 = profile1.get("formatting", {})
+            format2 = profile2.get("formatting", {})
+            
+            blended_format = {}
+            for key in set(list(format1.keys()) + list(format2.keys())):
+                # For boolean values, use weighted probability
+                if isinstance(format1.get(key, False), bool) and isinstance(format2.get(key, False), bool):
+                    value1 = 1 if format1.get(key, False) else 0
+                    value2 = 1 if format2.get(key, False) else 0
+                    blended_format[key] = (value1 * weight1 + value2 * weight2) > 0.5
+                # For string values, pick based on weight
+                elif isinstance(format1.get(key, ""), str) and isinstance(format2.get(key, ""), str):
+                    if weight1 > weight2:
+                        blended_format[key] = format1.get(key, "")
+                    else:
+                        blended_format[key] = format2.get(key, "")
+                # For other types, fallback to first profile's value
+                else:
+                    blended_format[key] = format1.get(key, format2.get(key))
+            
+            # Create blended profile
+            blended_profile = {
+                "name": blend_name,
+                "description": f"Blend of '{name1}' ({int(weight1*100)}%) and '{name2}' ({int(weight2*100)}%)",
+                "tags": list(set(profile1.get("tags", []) + profile2.get("tags", []))),
+                "author": "Blend",
+                "version": "1.0.0",
+                "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "prefix": blended_prefix,
+                "suffix": blended_suffix,
+                "style_modifiers": blended_style,
+                "formatting": blended_format,
+                "parent_profiles": [name1, name2],
+                "blend_weights": [weight1, weight2]
+            }
+            
+            # Create the profile
+            return self.create_profile(blended_profile)
+            
+        except Exception as e:
+            self._logger(f"Failed to blend profiles: {e}", "ERROR")
+            return False
+
 
 def get_plugin_instance(core_system, config_path=None, logger=None, **kwargs):
     """

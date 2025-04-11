@@ -6,6 +6,7 @@ from tkinter import ttk, scrolledtext
 import time
 import datetime
 import os
+import sys
 from typing import Dict, List, Any, Optional, Callable
 
 class Dashboard:
@@ -38,6 +39,9 @@ class Dashboard:
         
         # Initialize UI components
         self.initialize_ui()
+        
+        # Initialize plugin extensions
+        self.initialize_plugin_extensions()
         
         # Update statistics
         self.update_statistics()
@@ -515,9 +519,37 @@ class Dashboard:
         # Update memory statistics
         self.update_memory_stats()
         
+        # Update plugin statistics
+        self.update_plugin_stats()
+        
         # Update status
         self.status_var.set(f"Statistics updated at {time.strftime('%H:%M:%S')}")
         
+    def update_plugin_stats(self):
+        """Update statistics from plugin providers"""
+        # Skip if no providers registered
+        if not hasattr(self, "plugin_stats_providers") or not self.plugin_stats_providers:
+            return
+            
+        # Call each provider and process the stats
+        for plugin_id, provider in self.plugin_stats_providers.items():
+            try:
+                # Get statistics from plugin
+                stats = provider()
+                
+                # Skip if no stats provided
+                if not stats or not isinstance(stats, dict):
+                    continue
+                    
+                # Update the plugin's dashboard if it has one
+                if plugin_id in self.plugin_dashboards:
+                    component = self.plugin_dashboards[plugin_id]["component"]
+                    if hasattr(component, "update_stats") and callable(component.update_stats):
+                        component.update_stats(stats)
+                        
+            except Exception as e:
+                self.log(f"[Dashboard] Error updating stats for plugin {plugin_id}: {e}")
+
     def update_session_stats(self):
         """Update session statistics"""
         # Get chat history
@@ -790,12 +822,274 @@ class Dashboard:
             
     def schedule_updates(self):
         """Schedule periodic updates"""
-        # Update every 5 seconds if window is open
         if self.window.winfo_exists():
-            # Update system info more frequently
+            # Update system info every 5 seconds
             self.update_system_info()
+            
+            # Update plugin stats at their own rates
+            self.update_plugin_refresh_timers()
+            
+            # Schedule next system refresh
             self.window.after(5000, self.schedule_updates)
             
-import sys  # Import needed for platform info
-
+    def update_plugin_refresh_timers(self):
+        """Update plugin statistics based on their refresh rates"""
+        if not hasattr(self, "plugin_extensions") or not self.plugin_extensions:
+            return
+            
+        current_time = time.time()
         
+        # Initialize last refresh time tracker if not exists
+        if not hasattr(self, "last_plugin_refresh"):
+            self.last_plugin_refresh = {}
+            
+        # Check each plugin extension
+        for plugin_id, extension in self.plugin_extensions.items():
+            # Get refresh rate (default to 10 seconds)
+            refresh_rate = extension.get("refresh_rate", 10)
+            last_refresh = self.last_plugin_refresh.get(plugin_id, 0)
+            
+            # If it's time to refresh this plugin's stats
+            if current_time - last_refresh >= refresh_rate:
+                # Update last refresh time
+                self.last_plugin_refresh[plugin_id] = current_time
+                
+                # If plugin has a stats provider, call it
+                if plugin_id in self.plugin_stats_providers:
+                    try:
+                        stats = self.plugin_stats_providers[plugin_id]()
+                        
+                        # Update dashboard component if available
+                        if plugin_id in self.plugin_dashboards:
+                            component = self.plugin_dashboards[plugin_id]["component"]
+                            if hasattr(component, "update_stats") and callable(component.update_stats):
+                                component.update_stats(stats)
+                    except Exception as e:
+                        self.log(f"[Dashboard] Error refreshing stats for plugin {plugin_id}: {e}")
+
+    def initialize_plugin_extensions(self):
+        """Initialize extensions for plugins in the dashboard"""
+        # Dictionary of registered plugin extensions
+        self.plugin_extensions = {}
+        
+        # Create plugins tab to contain plugin-specific dashboards
+        self.create_plugins_tab()
+        
+        # Register with plugin manager if available
+        if hasattr(self.parent, "plugin_manager"):
+            plugin_manager = self.parent.plugin_manager
+            
+            # Register for plugin events
+            plugin_manager.register_event_handler("dashboard", "plugin_activated", 
+                                                 self.on_plugin_activated)
+            plugin_manager.register_event_handler("dashboard", "plugin_deactivated", 
+                                                 self.on_plugin_deactivated)
+                                                 
+            # Get all active plugins and register them
+            active_plugins = plugin_manager.get_active_plugins()
+            for plugin_id, plugin in active_plugins.items():
+                self.register_plugin_extension(plugin_id, plugin)
+
+    def create_plugins_tab(self):
+        """Create a tab for plugin-specific dashboards"""
+        # Create main plugins tab
+        self.plugins_tab = ttk.Frame(self.notebook)
+        self.notebook.add(self.plugins_tab, text="Plugins")
+        
+        # Create notebook for plugin tabs
+        self.plugins_notebook = ttk.Notebook(self.plugins_tab)
+        self.plugins_notebook.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Empty message for when no plugins have dashboards
+        self.no_plugins_label = ttk.Label(
+            self.plugins_notebook, 
+            text="No plugins with dashboard components are currently active.",
+            font=("Helvetica", 10, "italic")
+        )
+        self.no_plugins_label.pack(pady=50)
+        
+        # Dictionary to track plugin dashboard components
+        self.plugin_dashboards = {}
+        self.plugin_stats_providers = {}
+
+    def register_plugin_extension(self, plugin_id, plugin):
+        """
+        Register a plugin extension for the dashboard
+        
+        Args:
+            plugin_id: Plugin identifier
+            plugin: Plugin instance
+        """
+        # Skip if plugin doesn't have dashboard extension
+        if not hasattr(plugin, "get_dashboard_extension"):
+            return
+            
+        try:
+            # Check if already registered
+            if plugin_id in self.plugin_extensions:
+                return
+                
+            # Get dashboard extension from plugin
+            extension = plugin.get_dashboard_extension(self)
+            
+            if not extension or not isinstance(extension, dict):
+                return
+                
+            # Store extension specification
+            self.plugin_extensions[plugin_id] = extension
+            
+            # Add dashboard tab if provided
+            if "dashboard_tab" in extension:
+                self.add_plugin_dashboard_tab(plugin_id, extension["dashboard_tab"])
+                
+            # Register statistics provider if provided
+            if "stats_provider" in extension and callable(extension["stats_provider"]):
+                self.plugin_stats_providers[plugin_id] = extension["stats_provider"]
+                
+            # Register overview widgets if provided
+            if "overview_widgets" in extension:
+                self.add_plugin_overview_widgets(plugin_id, extension["overview_widgets"])
+                
+            self.log(f"[Dashboard] Registered extension for plugin: {plugin_id}")
+            
+        except Exception as e:
+            self.log(f"[Dashboard] Error registering extension for plugin {plugin_id}: {e}")
+
+    def unregister_plugin_extension(self, plugin_id):
+        """
+        Unregister a plugin extension
+        
+        Args:
+            plugin_id: Plugin identifier
+        """
+        if plugin_id not in self.plugin_extensions:
+            return
+            
+        # Remove dashboard tab if present
+        if plugin_id in self.plugin_dashboards:
+            self.remove_plugin_dashboard_tab(plugin_id)
+            
+        # Remove statistics provider if present
+        if plugin_id in self.plugin_stats_providers:
+            del self.plugin_stats_providers[plugin_id]
+            
+        # Remove from extensions dictionary
+        del self.plugin_extensions[plugin_id]
+        
+        self.log(f"[Dashboard] Unregistered extension for plugin: {plugin_id}")
+
+    def add_plugin_dashboard_tab(self, plugin_id, dashboard_component):
+        """
+        Add a plugin dashboard tab
+        
+        Args:
+            plugin_id: Plugin identifier
+            dashboard_component: Dashboard component to add
+        """
+        # Hide the no plugins label if it's visible
+        if self.no_plugins_label.winfo_ismapped():
+            self.no_plugins_label.pack_forget()
+            
+        # Create tab frame
+        tab_frame = ttk.Frame(self.plugins_notebook)
+        
+        # Get plugin metadata
+        plugin_manager = getattr(self.parent, "plugin_manager", None)
+        plugin_name = plugin_id.capitalize()
+        
+        if plugin_manager:
+            plugin = plugin_manager.get_plugin_instance(plugin_id)
+            if plugin and hasattr(plugin, "METADATA"):
+                plugin_name = plugin.METADATA.get("name", plugin_name)
+        
+        # Add to notebook
+        self.plugins_notebook.add(tab_frame, text=plugin_name)
+        
+        # Add component to frame
+        if isinstance(dashboard_component, tk.Widget):
+            dashboard_component.pack(in_=tab_frame, fill=tk.BOTH, expand=True)
+            
+        # Store reference
+        self.plugin_dashboards[plugin_id] = {
+            "tab": tab_frame,
+            "component": dashboard_component
+        }
+
+    def remove_plugin_dashboard_tab(self, plugin_id):
+        """
+        Remove a plugin dashboard tab
+        
+        Args:
+            plugin_id: Plugin identifier
+        """
+        if plugin_id not in self.plugin_dashboards:
+            return
+            
+        # Get tab info
+        tab_info = self.plugin_dashboards[plugin_id]
+        tab_frame = tab_info["tab"]
+        
+        # Remove from notebook
+        tab_index = self.plugins_notebook.index(tab_frame)
+        if tab_index is not None:
+            self.plugins_notebook.forget(tab_index)
+        
+        # Clean up reference
+        del self.plugin_dashboards[plugin_id]
+        
+        # Show no plugins label if no more plugin dashboards
+        if not self.plugin_dashboards and not self.no_plugins_label.winfo_ismapped():
+            self.no_plugins_label.pack(pady=50)
+
+    def add_plugin_overview_widgets(self, plugin_id, widgets):
+        """
+        Add plugin widgets to the overview tab
+        
+        Args:
+            plugin_id: Plugin identifier
+            widgets: List of widgets to add
+        """
+        if not widgets or not isinstance(widgets, list):
+            return
+            
+        # Create section for plugin widgets if not exists
+        if not hasattr(self, "plugin_overview_frame"):
+            # Get the overview frame (first tab)
+            overview_tab = self.notebook.nametowidget(self.notebook.tabs()[0])
+            
+            # Create frame for plugin widgets
+            self.plugin_overview_frame = ttk.LabelFrame(overview_tab, text="Plugin Statistics")
+            self.plugin_overview_frame.pack(fill=tk.X, padx=20, pady=(5, 10), before=overview_tab.winfo_children()[-1])
+            
+        # Add widgets to section
+        for widget in widgets:
+            if isinstance(widget, tk.Widget):
+                widget.pack(in_=self.plugin_overview_frame, fill=tk.X, padx=5, pady=2)
+
+    def on_plugin_activated(self, plugin_id, plugin_instance):
+        """
+        Handle plugin activation event
+        
+        Args:
+            plugin_id: ID of activated plugin
+            plugin_instance: Plugin instance
+        """
+        # Register dashboard extension for newly activated plugin
+        self.register_plugin_extension(plugin_id, plugin_instance)
+        
+        # Update dashboard with new plugin data
+        self.update_statistics()
+
+    def on_plugin_deactivated(self, plugin_id):
+        """
+        Handle plugin deactivation event
+        
+        Args:
+            plugin_id: ID of deactivated plugin
+        """
+        # Unregister dashboard extension
+        self.unregister_plugin_extension(plugin_id)
+        
+        # Update dashboard to remove plugin data
+        self.update_statistics()
+

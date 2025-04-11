@@ -20,8 +20,10 @@ from .model_panel import ModelPanel
 from .config_panel import ConfigPanel
 from .log_viewer import LogViewer
 from .memory_panel import MemoryPanel
+from .resource_monitor_panel import ResourceMonitorPanel
 from core.plugin_manager import PluginManager
 from ui.plugin_panel import PluginPanel
+from .plugin_config_panel import PluginConfigPanel
 
 class MainWindow:
     """Main application window for the Irintai assistant"""
@@ -56,6 +58,12 @@ class MainWindow:
         
         # Initialize UI components
         self.initialize_ui()
+        
+        # Initialize plugins after UI is ready
+        self.initialize_plugins()
+        
+        # Update plugin menu
+        self.update_plugin_menu()
         
         # Set up cleanup on exit
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -192,6 +200,14 @@ class MainWindow:
         )
         self.notebook.add(self.memory_panel.frame, text="Memory")
         
+        # Create resource monitor panel
+        self.resource_monitor = ResourceMonitorPanel(
+            self.notebook,
+            self.logger.log,
+            self.system_monitor  # Pass the SystemMonitor instance
+        )
+        self.notebook.add(self.resource_monitor.frame, text="Resources")
+        
         # Create config panel
         self.config_panel = ConfigPanel(
             self.notebook,
@@ -204,13 +220,23 @@ class MainWindow:
         )
         self.notebook.add(self.config_panel.frame, text="Settings")
         
+        # Create plugin panel
         self.plugin_panel = PluginPanel(
-        self.notebook,
-        self.plugin_manager,
-        self.logger.log
+            self.notebook,
+            self.plugin_manager,
+            logger=self.logger.log
         )
         self.notebook.add(self.plugin_panel.frame, text="Plugins")
-
+        
+        # Create plugin config panel
+        self.plugin_config_panel = PluginConfigPanel(
+            self.notebook,
+            self.plugin_manager,
+            self.config_manager,
+            self.logger.log
+        )
+        self.notebook.add(self.plugin_config_panel.frame, text="Plugin Settings")
+        
         # Create status bar
         self.create_status_bar()
         
@@ -250,6 +276,24 @@ class MainWindow:
             command=self.show_dashboard
         ).pack(side=tk.LEFT, padx=5)
         
+        # Add plugins button with dropdown menu
+        self.plugins_button = ttk.Menubutton(
+            toolbar,
+            text="Plugins",
+            direction="below"
+        )
+        self.plugins_button.pack(side=tk.LEFT, padx=5)
+        
+        # Create the plugins menu
+        self.plugins_menu = tk.Menu(self.plugins_button, tearoff=0)
+        self.plugins_button["menu"] = self.plugins_menu
+        
+        # Add items to the menu (will be populated later)
+        self.plugins_menu.add_command(label="Manage Plugins", command=self.show_plugins_tab)
+        self.plugins_menu.add_command(label="Reload All Plugins", command=self.reload_all_plugins)
+        self.plugins_menu.add_separator()
+        self.plugins_menu.add_command(label="No active plugins", state=tk.DISABLED)
+        
         ttk.Button(
             toolbar, 
             text="Generate Reflection", 
@@ -269,6 +313,90 @@ class MainWindow:
         )
         memory_dropdown.pack(side=tk.LEFT, padx=5)
         memory_dropdown.bind("<<ComboboxSelected>>", self.on_memory_mode_changed)
+
+    def update_plugin_menu(self):
+        """Update the plugins dropdown menu with active plugins"""
+        # Remove existing plugin entries
+        menu_size = self.plugins_menu.index("end")
+        if menu_size > 3:  # Keep the first 4 items (Manage, Reload, Separator, No plugins)
+            self.plugins_menu.delete(3, menu_size)
+        
+        # Get active plugins
+        active_plugins = self.plugin_manager.get_active_plugins()
+        
+        if not active_plugins:
+            # Show "No active plugins" if none are active
+            self.plugins_menu.entryconfig(3, state=tk.NORMAL)
+            return
+        
+        # Hide "No active plugins" entry
+        self.plugins_menu.entryconfig(3, state=tk.DISABLED)
+        
+        # Add separator and active plugins
+        if active_plugins:
+            # Add each active plugin with its actions
+            for plugin_id, plugin in active_plugins.items():
+                # Check if plugin has a get_actions method
+                if hasattr(plugin, "get_actions") and callable(plugin.get_actions):
+                    try:
+                        actions = plugin.get_actions()
+                        if actions and isinstance(actions, dict):
+                            # Create a submenu for this plugin
+                            plugin_menu = tk.Menu(self.plugins_menu, tearoff=0)
+                            self.plugins_menu.add_cascade(label=plugin_id, menu=plugin_menu)
+                            
+                            # Add each action to the submenu
+                            for action_name, action_func in actions.items():
+                                if callable(action_func):
+                                    plugin_menu.add_command(label=action_name, command=action_func)
+                    except Exception as e:
+                        self.logger.log(f"[Error] Failed to get actions for plugin {plugin_id}: {e}")
+                else:
+                    # Just add the plugin name without actions
+                    self.plugins_menu.add_command(label=plugin_id, state=tk.DISABLED)
+
+    def show_plugins_tab(self):
+        """Show the plugins tab in the notebook"""
+        # Find the index of the plugins tab
+        for i in range(self.notebook.index("end")):
+            if self.notebook.tab(i, "text") == "Plugins":
+                self.notebook.select(i)
+                break
+
+    def reload_all_plugins(self):
+        """Reload all plugins"""
+        # Ask for confirmation
+        result = messagebox.askyesno(
+            "Reload Plugins",
+            "This will reload all plugins. Any unsaved plugin data may be lost.\n\nContinue?",
+            icon=messagebox.WARNING
+        )
+        
+        if not result:
+            return
+        
+        # Get list of active plugins
+        active_plugins = list(self.plugin_manager.get_active_plugins().keys())
+        
+        # Unload all plugins
+        for plugin_id in self.plugin_manager.get_all_plugins().keys():
+            self.plugin_manager.unload_plugin(plugin_id)
+        
+        # Rediscover and reload plugins
+        self.plugin_manager.discover_plugins()
+        
+        # Reload previously active plugins
+        for plugin_id in active_plugins:
+            success = self.plugin_manager.load_plugin(plugin_id)
+            if success:
+                self.plugin_manager.activate_plugin(plugin_id)
+        
+        # Update UI
+        if hasattr(self, 'plugin_panel'):
+            self.plugin_panel.refresh_plugin_list()
+        
+        # Update menu
+        self.update_plugin_menu()
         
     def create_status_bar(self):
         """Create the status bar at the bottom of the window"""
@@ -451,19 +579,189 @@ class MainWindow:
         # Save configuration
         self.config_manager.save_config()
         
+        # Deactivate all active plugins
+        self.cleanup_plugins()
+        
         # Log shutdown
         self.logger.log("[System] Irintai Assistant shutting down")
         
         # Destroy the root window
         self.root.destroy()
 
-        def cleanup_plugins():
-            """Deactivate all active plugins"""
+    def cleanup_plugins(self):
+        """Deactivate all active plugins"""
+        self.logger.log("[Plugins] Deactivating all plugins")
+        
+        try:
             plugins_info = self.plugin_manager.get_all_plugins()
             for plugin_name, info in plugins_info.items():
-                if info["status"] == "Active":
-                    self.log(f"[Plugins] Deactivating plugin: {plugin_name}")
+                if info.get("status") == "Active":
+                    self.logger.log(f"[Plugins] Deactivating plugin: {plugin_name}")
                     self.plugin_manager.deactivate_plugin(plugin_name)
+                    
+            # Allow a short delay for clean deactivation
+            time.sleep(0.5)
+        except Exception as e:
+            self.logger.log(f"[Error] Failed to cleanup plugins: {e}", "ERROR")
 
-        # Call plugin cleanup
-        cleanup_plugins()
+    def initialize_plugins(self):
+        """Initialize the plugin system and load available plugins"""
+        # Log plugin initialization
+        self.logger.log("[Plugins] Initializing plugin system")
+        
+        # Set error handler
+        self.plugin_manager.set_error_handler(self.handle_plugin_error)
+        
+        # Register core components as services for plugins
+        self.register_plugin_services()
+        
+        # Discover available plugins
+        plugin_count = self.plugin_manager.discover_plugins()
+        self.logger.log(f"[Plugins] Discovered {plugin_count} plugins")
+        
+        # Get auto-load plugins from config
+        autoload_plugins = self.config_manager.get("autoload_plugins", [])
+        
+        # Auto-load plugins
+        if autoload_plugins:
+            self.logger.log(f"[Plugins] Auto-loading {len(autoload_plugins)} plugins")
+            for plugin_name in autoload_plugins:
+                success = self.plugin_manager.load_plugin(plugin_name)
+                if success:
+                    # Auto-activate plugin if in the list
+                    activate = self.config_manager.get(f"autoactivate.{plugin_name}", False)
+                    if activate:
+                        self.plugin_manager.activate_plugin(plugin_name)
+        
+        # Register for plugin events
+        self.plugin_manager.register_event_handler("main_window", "plugin_loaded", self.on_plugin_loaded)
+        self.plugin_manager.register_event_handler("main_window", "plugin_activated", self.on_plugin_activated)
+        self.plugin_manager.register_event_handler("main_window", "plugin_deactivated", self.on_plugin_deactivated)
+        self.plugin_manager.register_event_handler("main_window", "plugin_unloaded", self.on_plugin_unloaded)
+        self.plugin_manager.register_event_handler("main_window", "plugin_error", self.on_plugin_error)
+
+    def register_plugin_services(self):
+        """Register core services for plugins to access"""
+        # Register core components as services
+        services = {
+            "logger": self.logger,
+            "model_manager": self.model_manager,
+            "chat_engine": self.chat_engine,
+            "memory_system": self.memory_system,
+            "config_manager": self.config_manager,
+            "system_monitor": self.system_monitor,
+            "file_ops": self.file_ops
+        }
+        
+        # Add UI components (only if they're already initialized)
+        if hasattr(self, 'chat_panel'):
+            services["chat_panel"] = self.chat_panel
+            
+        if hasattr(self, 'model_panel'):
+            services["model_panel"] = self.model_panel
+            
+        if hasattr(self, 'memory_panel'):
+            services["memory_panel"] = self.memory_panel
+        
+        # Register each service
+        for name, service in services.items():
+            self.plugin_manager.register_service(name, service)
+        
+        self.logger.log(f"[Plugins] Registered {len(services)} core services for plugins")
+
+    def handle_plugin_error(self, plugin_name, error_msg, error_type="ERROR"):
+        """
+        Handle plugin errors
+        
+        Args:
+            plugin_name: Name of the plugin
+            error_msg: Error message
+            error_type: Type of error (ERROR, WARNING)
+        """
+        # Log the error
+        self.logger.log(f"[Plugin Error] {plugin_name}: {error_msg}", error_type)
+        
+        # Update the plugin panel if it exists
+        if hasattr(self, 'plugin_panel'):
+            self.plugin_panel.refresh_plugin_list()
+            
+        # Show critical errors in UI
+        if error_type == "ERROR" and self.config_manager.get("show_plugin_errors", True):
+            messagebox.showerror(
+                f"Plugin Error: {plugin_name}",
+                f"An error occurred in plugin '{plugin_name}':\n\n{error_msg}"
+            )
+
+    def on_plugin_loaded(self, plugin_id, plugin_instance):
+        """
+        Handle plugin loaded event
+        
+        Args:
+            plugin_id: Plugin identifier
+            plugin_instance: Plugin instance
+        """
+        self.logger.log(f"[Plugins] Loaded plugin: {plugin_id}")
+        
+        # Update UI if needed
+        if hasattr(self, 'plugin_panel'):
+            self.plugin_panel.refresh_plugin_list()
+
+    def on_plugin_activated(self, plugin_id, plugin_instance):
+        """
+        Handle plugin activation event
+        
+        Args:
+            plugin_id: Plugin identifier
+            plugin_instance: Plugin instance
+        """
+        self.logger.log(f"[Plugins] Activated plugin: {plugin_id}")
+        
+        # Update plugin state in config for auto-activation
+        if self.config_manager.get(f"remember_plugin_state", True):
+            self.config_manager.set(f"autoactivate.{plugin_id}", True)
+            self.config_manager.save_config()
+        
+        # Update UI
+        if hasattr(self, 'plugin_panel'):
+            self.plugin_panel.refresh_plugin_list()
+
+    def on_plugin_deactivated(self, plugin_id):
+        """
+        Handle plugin deactivation event
+        
+        Args:
+            plugin_id: Plugin identifier
+        """
+        self.logger.log(f"[Plugins] Deactivated plugin: {plugin_id}")
+        
+        # Update plugin state in config
+        if self.config_manager.get(f"remember_plugin_state", True):
+            self.config_manager.set(f"autoactivate.{plugin_id}", False)
+            self.config_manager.save_config()
+        
+        # Update UI
+        if hasattr(self, 'plugin_panel'):
+            self.plugin_panel.refresh_plugin_list()
+
+    def on_plugin_unloaded(self, plugin_id):
+        """
+        Handle plugin unloaded event
+        
+        Args:
+            plugin_id: Plugin identifier
+        """
+        self.logger.log(f"[Plugins] Unloaded plugin: {plugin_id}")
+        
+        # Update UI
+        if hasattr(self, 'plugin_panel'):
+            self.plugin_panel.refresh_plugin_list()
+
+    def on_plugin_error(self, plugin_id, error_msg):
+        """
+        Handle plugin error event
+        
+        Args:
+            plugin_id: Plugin identifier
+            error_msg: Error message
+        """
+        self.handle_plugin_error(plugin_id, error_msg)

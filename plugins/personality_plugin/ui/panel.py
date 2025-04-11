@@ -54,44 +54,6 @@ class Panel:
             text="Personality Profiles",
             font=("Helvetica", 12, "bold")
         ).pack(side=tk.LEFT)
-
-    def activate_ui(plugin_instance, parent_container):
-        """
-        Manually activate the plugin UI
-        
-        Args:
-            plugin_instance: The plugin instance
-            parent_container: Parent widget to attach UI to
-        
-        Returns:
-            The UI panel
-        """
-        panel = plugin_instance.get_ui_panel(parent_container)
-        panel.pack(fill=tk.BOTH, expand=True)
-        return panel
-
-    def get_ui_panel(self, parent: tk.Widget) -> ttk.Frame:
-        """
-        Create a UI panel for this plugin
-        
-        Args:
-            parent: Parent widget
-            
-        Returns:
-            UI panel frame
-        """
-        # Create main frame
-        self.ui_panel = ttk.Frame(parent)
-        
-        # Create title and description
-        title_frame = ttk.Frame(self.ui_panel)
-        title_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        ttk.Label(
-            title_frame, 
-            text="Personality Profiles",
-            font=("Helvetica", 12, "bold")
-        ).pack(side=tk.LEFT)
         
         # Create main content section
         content_frame = ttk.Frame(self.ui_panel)
@@ -148,12 +110,6 @@ class Panel:
         
         ttk.Button(
             profiles_controls,
-            text="Duplicate",
-            command=self._ui_duplicate_profile
-        ).pack(side=tk.LEFT, padx=2)
-        
-        ttk.Button(
-            profiles_controls,
             text="Delete",
             command=self._ui_delete_profile
         ).pack(side=tk.LEFT, padx=2)
@@ -186,162 +142,142 @@ class Panel:
         # Create profile detail widgets
         self._create_profile_details_widgets()
         
-        # Import/Export buttons
-        export_frame = ttk.Frame(self.ui_panel)
-        export_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        ttk.Button(
-            export_frame,
-            text="Import Profile",
-            command=self._ui_import_profile
-        ).pack(side=tk.LEFT, padx=5)
-        
-        ttk.Button(
-            export_frame,
-            text="Export Profile",
-            command=self._ui_export_profile
-        ).pack(side=tk.LEFT, padx=5)
-        
-        # Bind profile selection event
-        self.profiles_listbox.bind("<<ListboxSelect>>", self._ui_on_profile_selected)
-        
         # Populate the profiles list
         self._ui_refresh_profiles_list()
         
         return self.ui_panel
 
-    def _create_profile_details_widgets(self) -> None:
+    def _create_profile_details_widgets(self):
         """
         Create widgets for displaying profile details
         """
-        # Clear existing widgets
-        for widget in self.details_content.winfo_children():
-            widget.destroy()
+        # Create frames for different sections
+        basic_info_frame = ttk.LabelFrame(self.details_content, text="Basic Information")
+        basic_info_frame.pack(fill=tk.X, padx=5, pady=5, anchor=tk.N)
         
-        # Create detail fields
-        self.detail_fields = {}
+        style_frame = ttk.LabelFrame(self.details_content, text="Style Modifiers")
+        style_frame.pack(fill=tk.X, padx=5, pady=5, anchor=tk.N)
         
-        fields = [
-            ("name", "Name", tk.StringVar()),
-            ("description", "Description", tk.StringVar()),
-            ("tags", "Tags", tk.StringVar()),
-            ("author", "Author", tk.StringVar()),
-            ("version", "Version", tk.StringVar()),
-            ("created", "Created", tk.StringVar()),
-            ("prefix", "Prefix", tk.StringVar()),
-            ("suffix", "Suffix", tk.StringVar())
+        formatting_frame = ttk.LabelFrame(self.details_content, text="Formatting Options")
+        formatting_frame.pack(fill=tk.X, padx=5, pady=5, anchor=tk.N)
+        
+        # Basic information fields
+        basic_fields = [
+            ("name", "Name", 30),
+            ("description", "Description", 50),
+            ("tags", "Tags", 30),
+            ("author", "Author", 20),
+            ("version", "Version", 10),
         ]
         
-        for field_id, label_text, variable in fields:
-            frame = ttk.Frame(self.details_content)
-            frame.pack(fill=tk.X, padx=5, pady=2)
+        for i, (field_id, label_text, width) in enumerate(basic_fields):
+            field_frame = ttk.Frame(basic_info_frame)
+            field_frame.pack(fill=tk.X, padx=5, pady=2)
             
-            ttk.Label(
-                frame,
-                text=f"{label_text}:",
-                width=10,
-                anchor=tk.W
-            ).pack(side=tk.LEFT)
+            ttk.Label(field_frame, text=f"{label_text}:", width=10).pack(side=tk.LEFT)
             
-            if field_id in ["description", "prefix", "suffix"]:
-                entry = ttk.Entry(
-                    frame,
-                    textvariable=variable,
-                    width=40
-                )
+            # Use Entry for most fields, Text for description
+            if field_id == "description":
+                var = tk.StringVar()
+                entry = ttk.Entry(field_frame, width=width, textvariable=var)
+                entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                self.detail_fields[field_id] = var
             else:
-                entry = ttk.Entry(
-                    frame,
-                    textvariable=variable,
-                    width=20
-                )
-            entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
+                var = tk.StringVar()
+                entry = ttk.Entry(field_frame, width=width, textvariable=var)
+                entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                self.detail_fields[field_id] = var
+        
+        # Prefix/suffix fields
+        adv_fields = [
+            ("prefix", "Prefix:", 50),
+            ("suffix", "Suffix:", 50),
+        ]
+        
+        for field_id, label_text, width in adv_fields:
+            field_frame = ttk.Frame(basic_info_frame)
+            field_frame.pack(fill=tk.X, padx=5, pady=2)
             
-            self.detail_fields[field_id] = variable
-        
-        # Style Modifiers section
-        ttk.Label(
-            self.details_content,
-            text="Style Modifiers",
-            font=("Helvetica", 10, "bold")
-        ).pack(anchor=tk.W, padx=5, pady=5)
-        
-        self.style_sliders = {}
-        
-        slider_labels = {
-            "formality": "Casual vs. Formal",
-            "creativity": "Precise vs. Creative",
-            "complexity": "Simple vs. Complex",
-            "empathy": "Analytical vs. Empathetic",
-            "directness": "Indirect vs. Direct"
-        }
-        
-        for slider_id, label_text in slider_labels.items():
-            frame = ttk.Frame(self.details_content)
-            frame.pack(fill=tk.X, padx=5, pady=2)
+            ttk.Label(field_frame, text=label_text, width=10).pack(side=tk.LEFT)
             
-            ttk.Label(
-                frame,
-                text=f"{label_text}:",
-                width=20,
-                anchor=tk.W
-            ).pack(side=tk.LEFT)
+            var = tk.StringVar()
+            entry = ttk.Entry(field_frame, width=width, textvariable=var)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.detail_fields[field_id] = var
+        
+        # Style modifier sliders
+        style_grid = ttk.Frame(style_frame)
+        style_grid.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
+        
+        style_modifiers = [
+            ("formality", "Formal", "Casual"),
+            ("creativity", "Creative", "Factual"),
+            ("complexity", "Complex", "Simple"),
+            ("empathy", "Empathetic", "Objective"),
+            ("directness", "Direct", "Diplomatic"),
+            ("humor", "Humorous", "Serious"),
+            ("enthusiasm", "Enthusiastic", "Reserved"),
+            ("conciseness", "Concise", "Detailed")
+        ]
+        
+        # Create grid layout
+        for i, (mod_id, left_label, right_label) in enumerate(style_modifiers):
+            row = i // 2
+            col = (i % 2) * 3
             
+            # Left label
+            ttk.Label(style_grid, text=left_label).grid(row=row, column=col, padx=5, pady=2, sticky=tk.E)
+            
+            # Slider
             var = tk.DoubleVar(value=0.5)
             slider = ttk.Scale(
-                frame,
+                style_grid,
                 from_=0.0,
                 to=1.0,
                 orient=tk.HORIZONTAL,
-                variable=var,
-                length=200
-            )
-            slider.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5)
-            
-            value_label = ttk.Label(
-                frame,
-                width=5,
-                text="0.5"
-            )
-            value_label.pack(side=tk.LEFT)
-            
-            # Update value label when slider changes
-            def _update_value_label(event, label=value_label, var=var):
-                label.config(text=f"{var.get():.1f}")
-            
-            slider.bind("<Motion>", _update_value_label)
-            
-            self.style_sliders[slider_id] = var
-        
-        # Special rules for Altruxan
-        self.special_rules_vars = {}
-        
-        ttk.Label(
-            self.details_content,
-            text="Special Rules",
-            font=("Helvetica", 10, "bold")
-        ).pack(anchor=tk.W, padx=5, pady=5)
-        
-        rules = [
-            ("honor_trauma", "Honor Trauma"),
-            ("recursive_framing", "Use Recursive Framing"),
-            ("use_symbolic_language", "Use Symbolic Language")
-        ]
-        
-        rules_frame = ttk.Frame(self.details_content)
-        rules_frame.pack(fill=tk.X, padx=5, pady=2)
-        
-        for i, (rule_id, label_text) in enumerate(rules):
-            var = tk.BooleanVar(value=False)
-            cb = ttk.Checkbutton(
-                rules_frame,
-                text=label_text,
+                length=100,
                 variable=var
             )
-            cb.grid(row=i//2, column=i%2, sticky=tk.W, padx=5, pady=2)
+            slider.grid(row=row, column=col+1, padx=5, pady=2)
+            self.style_sliders[mod_id] = var
             
-            self.special_rules_vars[rule_id] = var
-    
+            # Right label
+            ttk.Label(style_grid, text=right_label).grid(row=row, column=col+2, padx=5, pady=2, sticky=tk.W)
+        
+        # Formatting options
+        formatting_options = [
+            ("emphasize_key_points", "Emphasize key points"),
+            ("use_markdown", "Use Markdown formatting"),
+        ]
+        
+        for i, (option_id, label) in enumerate(formatting_options):
+            var = tk.BooleanVar(value=False)
+            checkbox = ttk.Checkbutton(
+                formatting_frame,
+                text=label,
+                variable=var
+            )
+            checkbox.pack(anchor=tk.W, padx=5, pady=2)
+            self.special_rules_vars[option_id] = var
+        
+        # Paragraph structure option
+        para_frame = ttk.Frame(formatting_frame)
+        para_frame.pack(fill=tk.X, padx=5, pady=2)
+        
+        ttk.Label(para_frame, text="Paragraph structure:").pack(side=tk.LEFT, padx=5)
+        
+        para_var = tk.StringVar(value="standard")
+        para_combo = ttk.Combobox(
+            para_frame,
+            textvariable=para_var,
+            values=["standard", "concise", "detailed", "academic"]
+        )
+        para_combo.pack(side=tk.LEFT, padx=5)
+        self.special_rules_vars["paragraph_structure"] = para_var
+        
+        # Add handlers
+        self.profiles_listbox.bind('<<ListboxSelect>>', self._ui_on_profile_selected)
+
     def _ui_refresh_profiles_list(self) -> None:
         """
         Refresh the profiles listbox
@@ -349,12 +285,12 @@ class Panel:
         # Clear existing items
         self.profiles_listbox.delete(0, tk.END)
         
-        # Get profiles
-        profiles = self._config.get("profiles", {})
-        active_profile = self._state.get("active_profile")
+        # Get profiles from the plugin
+        profiles = self.plugin.get_available_profiles()
+        active_profile = self.plugin.get_active_profile_name()
         
         # Add to listbox
-        for i, name in enumerate(sorted(profiles.keys())):
+        for i, name in enumerate(sorted(profiles)):
             display_name = name
             if name == active_profile:
                 display_name = f"* {name} (Active)"
@@ -381,12 +317,10 @@ class Panel:
         else:
             profile_name = display_name
         
-        # Get profile data
-        profiles = self._config.get("profiles", {})
-        if profile_name not in profiles:
+        # Get profile data from plugin
+        profile = self.plugin.get_profile(profile_name)
+        if not profile:
             return
-        
-        profile = profiles[profile_name]
         
         # Update detail fields
         for field_id, var in self.detail_fields.items():
@@ -404,7 +338,7 @@ class Panel:
         special_rules = profile.get("special_rules", {})
         for rule_id, var in self.special_rules_vars.items():
             var.set(special_rules.get(rule_id, False))
-    
+
     def _ui_activate_profile(self) -> None:
         """
         Activate the selected profile
@@ -414,15 +348,15 @@ class Panel:
             messagebox.showwarning("No Selection", "Please select a profile to activate")
             return
         
-        # Get profile name (remove active marker if present)
+        # Get profile name
         display_name = self.profiles_listbox.get(selection[0])
         if display_name.startswith("* "):
             profile_name = display_name[2:].split(" (Active)")[0]
         else:
             profile_name = display_name
         
-        # Set as active profile
-        success = self.set_active_profile(profile_name)
+        # Activate using plugin method
+        success = self.plugin.set_active_profile(profile_name)
         
         if success:
             messagebox.showinfo("Profile Activated", f"Profile '{profile_name}' is now active")
@@ -432,89 +366,123 @@ class Panel:
     
     def _ui_create_profile(self) -> None:
         """
-        Create a new personality profile
+        Create a new profile
         """
-        # Create a dialog for new profile
+        # Show dialog for creating new profile
         dialog = tk.Toplevel(self.ui_panel)
         dialog.title("Create New Profile")
         dialog.transient(self.ui_panel)
         dialog.grab_set()
         
-        # Create form
-        form_frame = ttk.Frame(dialog, padding=10)
-        form_frame.pack(fill=tk.BOTH, expand=True)
+        # Create form for basic profile info
+        frame = ttk.Frame(dialog, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
         
-        ttk.Label(form_frame, text="Profile Name:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=5)
+        # Name field
+        name_frame = ttk.Frame(frame)
+        name_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(name_frame, text="Name:", width=10).pack(side=tk.LEFT)
         name_var = tk.StringVar()
-        ttk.Entry(form_frame, textvariable=name_var, width=30).grid(row=0, column=1, padx=5, pady=5)
+        name_entry = ttk.Entry(name_frame, width=30, textvariable=name_var)
+        name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        ttk.Label(form_frame, text="Description:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=5)
+        # Description field
+        desc_frame = ttk.Frame(frame)
+        desc_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(desc_frame, text="Description:", width=10).pack(side=tk.LEFT)
         desc_var = tk.StringVar()
-        ttk.Entry(form_frame, textvariable=desc_var, width=30).grid(row=1, column=1, padx=5, pady=5)
+        desc_entry = ttk.Entry(desc_frame, width=40, textvariable=desc_var)
+        desc_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        ttk.Label(form_frame, text="Tags (comma separated):").grid(row=2, column=0, sticky=tk.W, padx=5, pady=5)
-        tags_var = tk.StringVar()
-        ttk.Entry(form_frame, textvariable=tags_var, width=30).grid(row=2, column=1, padx=5, pady=5)
+        # Template selection
+        template_frame = ttk.Frame(frame)
+        template_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(form_frame, text="Author:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=5)
-        author_var = tk.StringVar()
-        ttk.Entry(form_frame, textvariable=author_var, width=30).grid(row=3, column=1, padx=5, pady=5)
+        ttk.Label(template_frame, text="Template:").pack(side=tk.LEFT, padx=5)
+        
+        templates = ["Empty", "Standard", "Formal", "Casual", "Technical", "Creative"]
+        template_var = tk.StringVar(value="Empty")
+        template_combo = ttk.Combobox(
+            template_frame,
+            textvariable=template_var,
+            values=templates
+        )
+        template_combo.pack(side=tk.LEFT, padx=5)
+        
+        # Description 
+        ttk.Label(
+            frame,
+            text="You can edit all profile details after creating it.",
+            font=("Helvetica", 9, "italic")
+        ).pack(pady=10)
         
         # Buttons
-        button_frame = ttk.Frame(dialog)
+        button_frame = ttk.Frame(frame)
         button_frame.pack(fill=tk.X, pady=10)
         
         def on_create():
             name = name_var.get().strip()
+            description = desc_var.get().strip()
+            template = template_var.get()
+            
             if not name:
-                messagebox.showwarning("Invalid Name", "Profile name cannot be empty")
+                messagebox.showwarning("Missing Name", "Please enter a profile name")
+                return
+                
+            if name in self.plugin.get_available_profiles():
+                messagebox.showerror("Name Exists", f"A profile named '{name}' already exists")
                 return
             
-            # Create profile data
-            profile_data = {
-                "name": name,
-                "description": desc_var.get().strip(),
-                "tags": [tag.strip() for tag in tags_var.get().split(",") if tag.strip()],
-                "author": author_var.get().strip() or "User",
-                "version": "1.0.0",
-                "created": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "prefix": "",
-                "suffix": "",
-                "style_modifiers": {
-                    "formality": 0.5,
-                    "creativity": 0.5,
-                    "complexity": 0.5,
-                    "empathy": 0.5,
-                    "directness": 0.5
-                },
-                "formatting": {
-                    "emphasize_key_points": False,
-                    "use_markdown": True,
-                    "paragraph_structure": "standard"
-                }
-            }
+            # Create profile
+            if template == "Empty":
+                # Create empty profile
+                from ..core import create_empty_profile
+                profile_data = create_empty_profile(name)
+                profile_data["description"] = description
+            else:
+                # Use selected template
+                template_profile = self.plugin.get_profile(template) 
+                if not template_profile:
+                    # Fallback to empty profile
+                    from ..core import create_empty_profile
+                    profile_data = create_empty_profile(name)
+                else:
+                    # Clone template
+                    profile_data = template_profile.copy()
+                    profile_data["name"] = name
+                    
+                profile_data["description"] = description
             
-            # Create the profile
-            success = self.create_profile(profile_data)
+            # Create new profile
+            success = self.plugin.create_profile(profile_data)
             
             if success:
                 messagebox.showinfo("Profile Created", f"Profile '{name}' created successfully")
                 dialog.destroy()
                 self._ui_refresh_profiles_list()
+                
+                # Select the new profile
+                profiles = sorted(self.plugin.get_available_profiles())
+                try:
+                    idx = profiles.index(name)
+                    self.profiles_listbox.selection_set(idx)
+                    self.profiles_listbox.see(idx)
+                    self._ui_on_profile_selected(None)
+                except ValueError:
+                    pass
             else:
                 messagebox.showerror("Creation Failed", f"Failed to create profile '{name}'")
         
         ttk.Button(button_frame, text="Create", command=on_create).pack(side=tk.RIGHT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
         
-        # Center dialog
+        # Center dialog and focus name field
         dialog.update_idletasks()
-        width = dialog.winfo_width()
-        height = dialog.winfo_height()
-        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
-        y = (dialog.winfo_screenheight() // 2) - (height // 2)
-        dialog.geometry(f"{width}x{height}+{x}+{y}")
-    
+        dialog.geometry(f"400x250+{dialog.winfo_screenwidth()//2-200}+{dialog.winfo_screenheight()//2-125}")
+        name_entry.focus_set()
+
     def _ui_edit_profile(self) -> None:
         """
         Edit the selected profile
@@ -524,20 +492,18 @@ class Panel:
             messagebox.showwarning("No Selection", "Please select a profile to edit")
             return
         
-        # Get profile name (remove active marker if present)
+        # Get profile name
         display_name = self.profiles_listbox.get(selection[0])
         if display_name.startswith("* "):
             profile_name = display_name[2:].split(" (Active)")[0]
         else:
             profile_name = display_name
-        
-        # Get profile data
-        profiles = self._config.get("profiles", {})
-        if profile_name not in profiles:
+            
+        # Get current profile data
+        profile = self.plugin.get_profile(profile_name)
+        if not profile:
             messagebox.showerror("Profile Not Found", f"Profile '{profile_name}' not found")
             return
-        
-        profile = profiles[profile_name]
         
         # Create dialog for editing
         dialog = tk.Toplevel(self.ui_panel)
@@ -545,166 +511,193 @@ class Panel:
         dialog.transient(self.ui_panel)
         dialog.grab_set()
         
-        # Create notebook for tabs
+        # Use notebook for tabs
+        import tkinter.ttk as ttk
         notebook = ttk.Notebook(dialog)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
-        # Basic Info tab
-        basic_frame = ttk.Frame(notebook, padding=10)
-        notebook.add(basic_frame, text="Basic Info")
+        # Basic info tab
+        basic_tab = ttk.Frame(notebook)
+        notebook.add(basic_tab, text="Basic Info")
         
-        # Add basic fields
-        basic_vars = {}
+        # Style tab
+        style_tab = ttk.Frame(notebook)
+        notebook.add(style_tab, text="Style")
         
-        fields = [
-            ("description", "Description"),
-            ("tags", "Tags (comma separated)"),
-            ("author", "Author"),
-            ("prefix", "Prefix"),
-            ("suffix", "Suffix")
+        # Formatting tab
+        format_tab = ttk.Frame(notebook)
+        notebook.add(format_tab, text="Formatting")
+        
+        # --- Basic info tab ---
+        basic_fields = [
+            ("name", "Name:", profile.get("name", "")),
+            ("description", "Description:", profile.get("description", "")),
+            ("tags", "Tags:", ", ".join(profile.get("tags", []))),
+            ("author", "Author:", profile.get("author", "")),
+            ("version", "Version:", profile.get("version", "1.0.0")),
         ]
         
-        for i, (field_id, label_text) in enumerate(fields):
-            ttk.Label(basic_frame, text=label_text).grid(row=i, column=0, sticky=tk.W, padx=5, pady=5)
+        basic_vars = {}
+        for i, (field_id, label_text, value) in enumerate(basic_fields):
+            field_frame = ttk.Frame(basic_tab)
+            field_frame.pack(fill=tk.X, padx=10, pady=5)
             
-            value = profile.get(field_id, "")
-            if field_id == "tags" and isinstance(value, list):
-                value = ", ".join(value)
-                
+            ttk.Label(field_frame, text=label_text, width=12).pack(side=tk.LEFT)
+            
             var = tk.StringVar(value=value)
             basic_vars[field_id] = var
             
-            ttk.Entry(
-                basic_frame, 
-                textvariable=var, 
-                width=40
-            ).grid(row=i, column=1, padx=5, pady=5, sticky=tk.EW)
+            if field_id == "description":
+                entry = ttk.Entry(field_frame, width=50, textvariable=var)
+            else:
+                entry = ttk.Entry(field_frame, width=30, textvariable=var)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
-        # Style Modifiers tab
-        style_frame = ttk.Frame(notebook, padding=10)
-        notebook.add(style_frame, text="Style Modifiers")
+        # Prefix/suffix
+        prefix_frame = ttk.Frame(basic_tab)
+        prefix_frame.pack(fill=tk.X, padx=10, pady=5)
         
+        ttk.Label(prefix_frame, text="Prefix:", width=12).pack(side=tk.LEFT)
+        prefix_var = tk.StringVar(value=profile.get("prefix", ""))
+        basic_vars["prefix"] = prefix_var
+        ttk.Entry(prefix_frame, width=50, textvariable=prefix_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        suffix_frame = ttk.Frame(basic_tab)
+        suffix_frame.pack(fill=tk.X, padx=10, pady=5)
+        
+        ttk.Label(suffix_frame, text="Suffix:", width=12).pack(side=tk.LEFT)
+        suffix_var = tk.StringVar(value=profile.get("suffix", ""))
+        basic_vars["suffix"] = suffix_var
+        ttk.Entry(suffix_frame, width=50, textvariable=suffix_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # --- Style tab ---
         style_vars = {}
-        
-        slider_labels = {
-            "formality": "Casual vs. Formal",
-            "creativity": "Precise vs. Creative",
-            "complexity": "Simple vs. Complex",
-            "empathy": "Analytical vs. Empathetic",
-            "directness": "Indirect vs. Direct"
-        }
-        
         style_modifiers = profile.get("style_modifiers", {})
         
-        for i, (slider_id, label_text) in enumerate(slider_labels.items()):
-            ttk.Label(style_frame, text=label_text).grid(row=i, column=0, sticky=tk.W, padx=5, pady=5)
+        style_pairs = [
+            ("formality", "Formal", "Casual"),
+            ("creativity", "Creative", "Factual"),
+            ("complexity", "Complex", "Simple"),
+            ("empathy", "Empathetic", "Objective"),
+            ("directness", "Direct", "Diplomatic"),
+            ("humor", "Humorous", "Serious"),
+            ("enthusiasm", "Enthusiastic", "Reserved"),
+            ("conciseness", "Concise", "Detailed")
+        ]
+        
+        # Create sliders in a grid
+        for i, (mod_id, left_label, right_label) in enumerate(style_pairs):
+            row = i // 2
+            col = (i % 2) * 3
             
-            var = tk.DoubleVar(value=style_modifiers.get(slider_id, 0.5))
-            style_vars[slider_id] = var
+            # Left label
+            ttk.Label(style_tab, text=left_label).grid(row=row, column=col, padx=5, pady=10, sticky=tk.E)
+            
+            # Slider
+            var = tk.DoubleVar(value=style_modifiers.get(mod_id, 0.5))
+            style_vars[mod_id] = var
             
             slider = ttk.Scale(
-                style_frame,
+                style_tab,
                 from_=0.0,
                 to=1.0,
                 orient=tk.HORIZONTAL,
-                variable=var,
-                length=200
+                length=100,
+                variable=var
             )
-            slider.grid(row=i, column=1, padx=5, pady=5, sticky=tk.EW)
+            slider.grid(row=row, column=col+1, padx=5, pady=10)
             
-            value_label = ttk.Label(
-                style_frame,
-                width=5,
-                text=f"{var.get():.1f}"
-            )
-            value_label.grid(row=i, column=2, padx=5, pady=5)
-            
-            # Update value label when slider changes
-            def _update_label(event, label=value_label, var=var):
-                label.config(text=f"{var.get():.1f}")
-            
-            slider.bind("<Motion>", _update_label)
+            # Right label
+            ttk.Label(style_tab, text=right_label).grid(row=row, column=col+2, padx=5, pady=10, sticky=tk.W)
         
-        # Special Rules tab
-        rules_frame = ttk.Frame(notebook, padding=10)
-        notebook.add(rules_frame, text="Special Rules")
+        # --- Formatting tab ---
+        format_vars = {}
+        formatting = profile.get("formatting", {})
         
-        rule_vars = {}
-        
-        rules = [
-            ("honor_trauma", "Honor Trauma"),
-            ("recursive_framing", "Use Recursive Framing"),
-            ("use_symbolic_language", "Use Symbolic Language")
+        # Checkboxes for boolean options
+        format_bools = [
+            ("emphasize_key_points", "Emphasize key points", 
+             formatting.get("emphasize_key_points", False)),
+            ("use_markdown", "Use Markdown formatting", 
+             formatting.get("use_markdown", True)),
         ]
         
-        special_rules = profile.get("special_rules", {})
-        
-        for i, (rule_id, label_text) in enumerate(rules):
-            var = tk.BooleanVar(value=special_rules.get(rule_id, False))
-            rule_vars[rule_id] = var
+        for i, (option_id, label, value) in enumerate(format_bools):
+            var = tk.BooleanVar(value=value)
+            format_vars[option_id] = var
             
-            ttk.Checkbutton(
-                rules_frame,
-                text=label_text,
+            checkbox = ttk.Checkbutton(
+                format_tab,
+                text=label,
                 variable=var
-            ).grid(row=i, column=0, sticky=tk.W, padx=5, pady=5)
+            )
+            checkbox.pack(anchor=tk.W, padx=10, pady=5)
         
-        # Buttons
+        # Paragraph structure dropdown
+        para_frame = ttk.Frame(format_tab)
+        para_frame.pack(fill=tk.X, padx=10, pady=10)
+        
+        ttk.Label(para_frame, text="Paragraph structure:").pack(side=tk.LEFT, padx=5)
+        
+        para_var = tk.StringVar(value=formatting.get("paragraph_structure", "standard"))
+        format_vars["paragraph_structure"] = para_var
+        
+        para_combo = ttk.Combobox(
+            para_frame,
+            textvariable=para_var,
+            values=["standard", "concise", "detailed", "academic"]
+        )
+        para_combo.pack(side=tk.LEFT, padx=5)
+        
+        # --- Buttons at bottom ---
         button_frame = ttk.Frame(dialog)
-        button_frame.pack(fill=tk.X, pady=10)
+        button_frame.pack(fill=tk.X, padx=10, pady=10)
         
         def on_save():
-            # Collect updated profile data
-            profile_updates = {}
+            # Collect values
+            updated_profile = profile.copy()
             
-            # Basic info
+            # Update basic fields
             for field_id, var in basic_vars.items():
-                value = var.get().strip()
                 if field_id == "tags":
-                    value = [tag.strip() for tag in value.split(",") if tag.strip()]
-                profile_updates[field_id] = value
+                    # Convert comma-separated string to list
+                    tags_str = var.get().strip()
+                    if tags_str:
+                        updated_profile["tags"] = [t.strip() for t in tags_str.split(",")]
+                    else:
+                        updated_profile["tags"] = []
+                else:
+                    updated_profile[field_id] = var.get()
             
-            # Style modifiers
-            style_modifiers = {}
-            for slider_id, var in style_vars.items():
-                style_modifiers[slider_id] = round(var.get(), 1)
-            profile_updates["style_modifiers"] = style_modifiers
+            # Update style modifiers
+            style_mods = updated_profile.get("style_modifiers", {})
+            for mod_id, var in style_vars.items():
+                style_mods[mod_id] = var.get()
+            updated_profile["style_modifiers"] = style_mods
             
-            # Special rules
-            special_rules = {}
-            for rule_id, var in rule_vars.items():
-                special_rules[rule_id] = var.get()
-            profile_updates["special_rules"] = special_rules
+            # Update formatting
+            format_opts = updated_profile.get("formatting", {})
+            for opt_id, var in format_vars.items():
+                format_opts[opt_id] = var.get()
+            updated_profile["formatting"] = format_opts
             
-            # Add modification timestamp
-            profile_updates["modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
-            
-            # Update the profile
-            success = self.update_profile(profile_name, profile_updates)
+            # Save profile
+            success = self.plugin.update_profile(profile_name, updated_profile)
             
             if success:
                 messagebox.showinfo("Profile Updated", f"Profile '{profile_name}' updated successfully")
                 dialog.destroy()
                 self._ui_refresh_profiles_list()
-                
-                # Refresh details if this is the currently selected profile
-                selection = self.profiles_listbox.curselection()
-                if selection:
-                    self._ui_on_profile_selected(None)
             else:
                 messagebox.showerror("Update Failed", f"Failed to update profile '{profile_name}'")
         
         ttk.Button(button_frame, text="Save", command=on_save).pack(side=tk.RIGHT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
         
-        # Configure grid columns
-        basic_frame.columnconfigure(1, weight=1)
-        style_frame.columnconfigure(1, weight=1)
-        
         # Center dialog
         dialog.update_idletasks()
-        dialog.geometry(f"500x400+{dialog.winfo_screenwidth()//2-250}+{dialog.winfo_screenheight()//2-200}")
-    
+        dialog.geometry(f"600x400+{dialog.winfo_screenwidth()//2-300}+{dialog.winfo_screenheight()//2-200}")
+
     def _ui_duplicate_profile(self) -> None:
         """
         Duplicate the selected profile
@@ -749,17 +742,26 @@ class Panel:
             messagebox.showwarning("No Selection", "Please select a profile to delete")
             return
         
-        # Get profile name (remove active marker if present)
+        # Get profile name
         display_name = self.profiles_listbox.get(selection[0])
         if display_name.startswith("* "):
             profile_name = display_name[2:].split(" (Active)")[0]
         else:
             profile_name = display_name
         
+        # Check if this is the active profile
+        active_profile = self.plugin.get_active_profile_name()
+        if profile_name == active_profile:
+            messagebox.showerror(
+                "Cannot Delete", 
+                f"Cannot delete the active profile. Please activate a different profile first."
+            )
+            return
+        
         # Confirm deletion
         confirm = messagebox.askyesno(
-            "Confirm Deletion",
-            f"Are you sure you want to delete the profile '{profile_name}'?",
+            "Confirm Delete", 
+            f"Are you sure you want to delete the profile '{profile_name}'?\nThis cannot be undone.",
             icon=messagebox.WARNING
         )
         
@@ -767,89 +769,185 @@ class Panel:
             return
         
         # Delete the profile
-        success = self.delete_profile(profile_name)
+        success = self.plugin.delete_profile(profile_name)
         
         if success:
-            messagebox.showinfo("Profile Deleted", f"Profile '{profile_name}' deleted successfully")
+            messagebox.showinfo("Profile Deleted", f"Profile '{profile_name}' has been deleted")
             self._ui_refresh_profiles_list()
         else:
-            messagebox.showerror("Deletion Failed", f"Failed to delete profile '{profile_name}'")
+            messagebox.showerror("Delete Failed", f"Failed to delete profile '{profile_name}'")
     
     def _ui_import_profile(self) -> None:
         """
-        Import a profile from JSON
+        Import a profile from JSON or file
         """
-        # Show dialog for JSON input
-        dialog = tk.Toplevel(self.ui_panel)
-        dialog.title("Import Profile")
-        dialog.transient(self.ui_panel)
-        dialog.grab_set()
-        
-        # Create text area for JSON
-        frame = ttk.Frame(dialog, padding=10)
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        ttk.Label(
-            frame,
-            text="Paste profile JSON:",
-            font=("Helvetica", 10, "bold")
-        ).pack(anchor=tk.W)
-        
-        json_text = scrolledtext.ScrolledText(
-            frame,
-            width=60,
-            height=20,
-            wrap=tk.WORD
+        # Ask user if they want to import from file or paste JSON
+        import_options = ["Import from file", "Paste JSON"]
+        choice = messagebox.askquestion(
+            "Import Method",
+            "Do you want to import from a file?",
+            type=messagebox.YESNOCANCEL
         )
-        json_text.pack(fill=tk.BOTH, expand=True, pady=5)
         
-        # Buttons
-        button_frame = ttk.Frame(dialog)
-        button_frame.pack(fill=tk.X, pady=10)
-        
-        def on_import():
-            json_str = json_text.get("1.0", tk.END).strip()
-            if not json_str:
-                messagebox.showwarning("Empty JSON", "Please paste profile JSON")
-                return
+        if choice == "yes":
+            # Import from file
+            from tkinter import filedialog
+            file_path = filedialog.askopenfilename(
+                title="Select Profile File",
+                filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")]
+            )
             
-            # Import the profile
-            success = self.import_profile(json_str)
+            if not file_path:
+                return
+                
+            # Use plugin's import method
+            success = self.plugin.import_profile_from_file(file_path)
             
             if success:
-                messagebox.showinfo("Profile Imported", "Profile imported successfully")
-                dialog.destroy()
+                messagebox.showinfo("Profile Imported", f"Profile imported successfully from {file_path}")
                 self._ui_refresh_profiles_list()
             else:
-                messagebox.showerror("Import Failed", "Failed to import profile")
-        
-        ttk.Button(button_frame, text="Import", command=on_import).pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
-        
-        # Center dialog
-        dialog.update_idletasks()
-        dialog.geometry(f"600x500+{dialog.winfo_screenwidth()//2-300}+{dialog.winfo_screenheight()//2-250}")
-    
+                messagebox.showerror("Import Failed", f"Failed to import profile from {file_path}")
+                
+        elif choice == "no":
+            # Import from pasted JSON
+            # Show dialog for JSON input
+            dialog = tk.Toplevel(self.ui_panel)
+            dialog.title("Import Profile")
+            dialog.transient(self.ui_panel)
+            dialog.grab_set()
+            
+            # Create text area for JSON
+            frame = ttk.Frame(dialog, padding=10)
+            frame.pack(fill=tk.BOTH, expand=True)
+            
+            ttk.Label(
+                frame,
+                text="Paste profile JSON:",
+                font=("Helvetica", 10, "bold")
+            ).pack(anchor=tk.W)
+            
+            json_text = scrolledtext.ScrolledText(
+                frame,
+                width=60,
+                height=20,
+                wrap=tk.WORD
+            )
+            json_text.pack(fill=tk.BOTH, expand=True, pady=5)
+            
+            # Buttons
+            button_frame = ttk.Frame(dialog)
+            button_frame.pack(fill=tk.X, pady=10)
+            
+            def on_import():
+                import json
+                json_str = json_text.get("1.0", tk.END).strip()
+                if not json_str:
+                    messagebox.showwarning("Empty JSON", "Please paste profile JSON")
+                    return
+                
+                try:
+                    # Parse JSON to verify format
+                    profile_data = json.loads(json_str)
+                    
+                    # Get profile name
+                    profile_name = profile_data.get("name")
+                    if not profile_name:
+                        messagebox.showerror("Invalid Profile", "Profile must have a name")
+                        return
+                        
+                    # Check if profile already exists
+                    if profile_name in self.plugin.get_available_profiles():
+                        confirm = messagebox.askyesno(
+                            "Profile Exists",
+                            f"A profile named '{profile_name}' already exists. Overwrite?",
+                            icon=messagebox.WARNING
+                        )
+                        
+                        if not confirm:
+                            return
+                
+                    # Create or update the profile
+                    success = self._save_profile_changes(profile_name, profile_data)
+                    
+                    if success:
+                        messagebox.showinfo("Profile Imported", f"Profile '{profile_name}' imported successfully")
+                        dialog.destroy()
+                        self._ui_refresh_profiles_list()
+                    else:
+                        messagebox.showerror("Import Failed", f"Failed to import profile '{profile_name}'")
+                        
+                except json.JSONDecodeError:
+                    messagebox.showerror("Invalid JSON", "The provided text is not valid JSON")
+                    
+                except Exception as e:
+                    messagebox.showerror("Import Error", f"Error importing profile: {e}")
+            
+            ttk.Button(button_frame, text="Import", command=on_import).pack(side=tk.RIGHT, padx=5)
+            ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.RIGHT, padx=5)
+            
+            # Center dialog
+            dialog.update_idletasks()
+            dialog.geometry(f"600x500+{dialog.winfo_screenwidth()//2-300}+{dialog.winfo_screenheight()//2-250}")
+
     def _ui_export_profile(self) -> None:
         """
-        Export the selected profile to JSON
+        Export the selected profile to JSON or file
         """
         selection = self.profiles_listbox.curselection()
         if not selection:
             messagebox.showwarning("No Selection", "Please select a profile to export")
             return
         
-        # Get profile name (remove active marker if present)
+        # Get profile name
         display_name = self.profiles_listbox.get(selection[0])
         if display_name.startswith("* "):
             profile_name = display_name[2:].split(" (Active)")[0]
         else:
             profile_name = display_name
         
-        # Export the profile
-        json_str = self.export_profile(profile_name)
+        # Get profile data
+        profile = self.plugin.get_profile(profile_name)
+        if not profile:
+            messagebox.showerror("Profile Not Found", f"Profile '{profile_name}' not found")
+            return
         
-        if json_str:
+        # Ask user if they want to export to file or view JSON
+        export_options = ["Export to file", "View JSON"]
+        choice = messagebox.askquestion(
+            "Export Method",
+            "Do you want to export to a file?",
+            type=messagebox.YESNOCANCEL
+        )
+        
+        if choice == "yes":
+            # Export to file
+            from tkinter import filedialog
+            file_path = filedialog.asksaveasfilename(
+                title="Save Profile",
+                defaultextension=".json",
+                filetypes=[("JSON Files", "*.json"), ("All Files", "*.*")],
+                initialfile=f"{profile_name}.json"
+            )
+            
+            if not file_path:
+                return
+                
+            # Use plugin's export method
+            success = self.plugin.export_profile_to_file(profile_name, file_path)
+            
+            if success:
+                messagebox.showinfo("Profile Exported", f"Profile exported to {file_path}")
+            else:
+                messagebox.showerror("Export Failed", f"Failed to export profile to {file_path}")
+                
+        elif choice == "no":
+            # Display JSON in dialog
+            import json
+            
+            # Format JSON for display
+            json_str = json.dumps(profile, indent=2)
+            
             # Show dialog with JSON
             dialog = tk.Toplevel(self.ui_panel)
             dialog.title(f"Export Profile: {profile_name}")
@@ -891,5 +989,35 @@ class Panel:
             # Center dialog
             dialog.update_idletasks()
             dialog.geometry(f"600x500+{dialog.winfo_screenwidth()//2-300}+{dialog.winfo_screenheight()//2-250}")
+    
+    def activate_ui(self, parent_container):
+        """
+        Activate the plugin UI
+        
+        Args:
+            parent_container: Parent widget to attach UI to
+        
+        Returns:
+            The UI panel
+        """
+        panel = self.get_ui_panel(parent_container)
+        panel.pack(fill=tk.BOTH, expand=True)
+        return panel
+    
+    def _save_profile_changes(self, profile_name, profile_data):
+        """
+        Save changes to a profile
+        
+        Args:
+            profile_name: Name of the profile to update
+            profile_data: New profile data
+            
+        Returns:
+            Success flag
+        """
+        if profile_name in self.plugin.get_available_profiles():
+            # Update existing profile
+            return self.plugin.update_profile(profile_name, profile_data)
         else:
-            messagebox.showerror("Export Failed", f"Failed to export profile '{profile_name}'")
+            # Create new profile
+            return self.plugin.create_profile(profile_name, profile_data)

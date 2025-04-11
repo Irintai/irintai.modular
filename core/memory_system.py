@@ -288,7 +288,7 @@ class MemorySystem:
     def _add_chunked_file(self, file_path: str, content: str, 
                           chunk_size: int, chunk_overlap: int) -> bool:
         """
-        Add a file to the index in chunks
+        Add a file to the index in chunks using sentence-aware chunking
         
         Args:
             file_path: Path to the file
@@ -300,28 +300,32 @@ class MemorySystem:
             True if file added successfully, False otherwise
         """
         try:
-            # Split into chunks
-            chunks = []
-            for i in range(0, len(content), chunk_size - chunk_overlap):
-                chunk = content[i:i + chunk_size]
-                if len(chunk) >= chunk_size / 2:  # Only add substantial chunks
-                    chunks.append(chunk)
+            # Get the file name for metadata
+            file_name = os.path.basename(file_path)
+            
+            # Use the sentence-aware chunking method
+            chunks = self._chunk_text(content, max_chunk_size=chunk_size, overlap=chunk_overlap)
+            
+            self.log(f"[Memory] Split file '{file_name}' into {len(chunks)} chunks")
             
             # Create metadata for each chunk
             metadata = []
             for i, chunk in enumerate(chunks):
                 meta = {
-                    "source": os.path.basename(file_path),
+                    "source": file_name,
                     "path": file_path,
                     "text": chunk,
                     "chunk": i + 1,
                     "total_chunks": len(chunks),
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    # Add file extension as a hint about content type
+                    "file_type": os.path.splitext(file_path)[1].lower(),
                 }
                 metadata.append(meta)
                 
             # Add chunks to index
             return self.add_to_index(chunks, metadata)
+            
         except Exception as e:
             self.log(f"[Memory Error] Failed to chunk file {file_path}: {e}")
             return False
@@ -356,3 +360,250 @@ class MemorySystem:
                 stats["last_updated"] = max(timestamps)
                 
         return stats
+    
+    def _chunk_text(self, text: str, max_chunk_size: int = 1000, overlap: int = 100) -> List[str]:
+        """Split text into overlapping chunks of maximum size"""
+        chunks = []
+        
+        # If text is shorter than max chunk size, return as is
+        if len(text) <= max_chunk_size:
+            return [text]
+        
+        # Split into sentences to avoid breaking sentences
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+        
+        current_chunk = ""
+        
+        for sentence in sentences:
+            # If adding this sentence would exceed max_chunk_size
+            if len(current_chunk) + len(sentence) > max_chunk_size and current_chunk:
+                # Add current chunk to chunks list
+                chunks.append(current_chunk)
+                
+                # Start new chunk with overlap
+                words = current_chunk.split()
+                overlap_words = min(len(words), int(overlap / 4))  # Approx 4 chars per word
+                overlap_text = " ".join(words[-overlap_words:]) if overlap_words > 0 else ""
+                current_chunk = overlap_text + " " + sentence
+            else:
+                # Add sentence to current chunk
+                if current_chunk:
+                    current_chunk += " " + sentence
+                else:
+                    current_chunk = sentence
+        
+        # Add the last chunk if it's not empty
+        if current_chunk:
+            chunks.append(current_chunk)
+        
+        return chunks
+    
+    def add_reflection(self, category: str, content: str, importance: float = 0.5) -> Optional[str]:
+        """
+        Add a reflection or insight to the memory system
+        
+        Args:
+            category: Category of reflection (e.g., 'conversation', 'learning', 'user_preference')
+            content: Text content of the reflection
+            importance: Importance score (0.0-1.0) to prioritize in retrieval
+            
+        Returns:
+            ID of the added reflection or None if failed
+        """
+        if not self.model:
+            self.log("[Memory Warning] Cannot add reflection: model not loaded")
+            return None
+            
+        try:
+            # Generate a unique ID
+            reflection_id = f"refl_{int(time.time())}_{category}"
+            
+            # Create metadata
+            metadata = {
+                "id": reflection_id,
+                "source": "reflection",
+                "category": category,
+                "importance": importance,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "text": content
+            }
+            
+            # Add to index
+            success = self.add_to_index([content], [metadata])
+            
+            if success:
+                self.log(f"[Memory] Added {category} reflection to memory: {content[:50]}...")
+                return reflection_id
+            else:
+                return None
+                
+        except Exception as e:
+            self.log(f"[Memory Error] Failed to add reflection: {e}")
+            return None
+        
+    def get_context_for_query(self, query: str, max_tokens: int = 1500, 
+                             top_k: int = 5, min_score: float = 0.3) -> str:
+        """
+        Get a formatted context string for a query from memory
+        
+        Args:
+            query: Query to find context for
+            max_tokens: Maximum approximate tokens to include in context
+            top_k: Maximum number of results to include
+            min_score: Minimum similarity score to include
+        
+        Returns:
+            Formatted context string
+        """
+        # Search for relevant items
+        results = self.search(query, top_k=top_k)
+        
+        if not results:
+            return ""
+            
+        # Filter by minimum score
+        results = [r for r in results if r.get("score", 0) >= min_score]
+        
+        if not results:
+            return ""
+            
+        # Format the context
+        context_parts = []
+        total_length = 0
+        char_per_token = 4  # Rough approximation
+        max_chars = max_tokens * char_per_token
+        
+        for item in results:
+            # Get text from the item
+            text = item.get("text", "")
+            if not text:
+                continue
+                
+            # Extract metadata for context
+            source = item.get("source", "Unknown")
+            score = item.get("score", 0)
+            
+            # Format this item
+            item_text = f"[Source: {source} (relevance: {score:.2f})]\n{text}\n"
+            
+            # Check if we've reached the max length
+            if total_length + len(item_text) > max_chars:
+                # Truncate if needed
+                available_chars = max_chars - total_length
+                if available_chars > 100:  # Only add if we can include meaningful content
+                    item_text = item_text[:available_chars] + "..."
+                    context_parts.append(item_text)
+                break
+                
+            context_parts.append(item_text)
+            total_length += len(item_text)
+        
+        return "\n".join(context_parts)
+
+    def search_by_category(self, category: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        Retrieve items from memory by category
+        
+        Args:
+            category: Category to search for
+            top_k: Maximum number of results to return
+            
+        Returns:
+            List of items matching the category
+        """
+        if not self.documents:
+            return []
+            
+        try:
+            # Find all documents with matching category
+            matches = [doc for doc in self.documents if doc.get("category") == category]
+            
+            # Sort by timestamp (newest first)
+            matches.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+            
+            # Limit to top_k
+            return matches[:top_k]
+                
+        except Exception as e:
+            self.log(f"[Memory Error] Failed to search by category: {e}")
+            return []
+    
+    def export_memory(self, export_path: str) -> bool:
+        """
+        Export the memory system to a file
+        
+        Args:
+            export_path: Path to export to
+            
+        Returns:
+            True if export successful, False otherwise
+        """
+        try:
+            # Create data to export
+            export_data = {
+                "model_name": self.model_name,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "documents": self.documents,
+                "embeddings": [emb.cpu().tolist() for emb in self.index]
+            }
+            
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(export_path), exist_ok=True)
+            
+            # Save to file
+            with open(export_path, "w", encoding="utf-8") as f:
+                json.dump(export_data, f, indent=2)
+                
+            self.log(f"[Memory] Exported memory to {export_path}")
+            return True
+            
+        except Exception as e:
+            self.log(f"[Memory Error] Failed to export memory: {e}")
+            return False
+            
+    def import_memory(self, import_path: str, merge: bool = False) -> bool:
+        """
+        Import memory from a file
+        
+        Args:
+            import_path: Path to import from
+            merge: Whether to merge with existing memory or replace
+            
+        Returns:
+            True if import successful, False otherwise
+        """
+        if not os.path.exists(import_path):
+            self.log(f"[Memory Error] Import file not found: {import_path}")
+            return False
+            
+        try:
+            # Load from file
+            with open(import_path, "r", encoding="utf-8") as f:
+                import_data = json.load(f)
+                
+            # Validate data
+            if "documents" not in import_data or "embeddings" not in import_data:
+                self.log(f"[Memory Error] Invalid memory export file: {import_path}")
+                return False
+                
+            # Clear existing memory if not merging
+            if not merge:
+                self.index = []
+                self.documents = []
+                
+            # Import data
+            for emb_data, doc in zip(import_data["embeddings"], import_data["documents"]):
+                emb = torch.tensor(emb_data)
+                self.index.append(emb)
+                self.documents.append(doc)
+                
+            self.log(f"[Memory] Imported {len(import_data['documents'])} items from {import_path}")
+            
+            # Save to index
+            self.save_index()
+            return True
+            
+        except Exception as e:
+            self.log(f"[Memory Error] Failed to import memory: {e}")
+            return False

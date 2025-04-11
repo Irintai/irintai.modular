@@ -30,8 +30,17 @@ class ChatPanel:
         # Initialize UI components
         self.initialize_ui()
         
+        # Initialize plugin hooks AFTER UI components are created
+        self.initialize_plugin_hooks()
+        
         # Load chat history
         self.load_chat_history()
+        
+        # Update status indicators
+        self.update_status_indicators()
+        
+        # Set up keyboard shortcuts
+        self.attach_keyboard_shortcuts()
         
     def initialize_ui(self):
         """Initialize the UI components"""
@@ -49,12 +58,12 @@ class ChatPanel:
         
     def create_system_prompt_section(self):
         """Create the system prompt input section"""
-        system_frame = ttk.Frame(self.frame)
-        system_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
+        self.system_frame = ttk.Frame(self.frame)
+        self.system_frame.pack(fill=tk.X, padx=5, pady=(5, 0))
         
         # Add label
         ttk.Label(
-            system_frame, 
+            self.system_frame, 
             text="System Prompt:", 
             font=("Arial", 9, "bold")
         ).pack(side=tk.LEFT)
@@ -64,7 +73,7 @@ class ChatPanel:
             value=self.chat_engine.system_prompt
         )
         self.system_prompt_entry = ttk.Entry(
-            system_frame, 
+            self.system_frame, 
             textvariable=self.system_prompt_var, 
             width=70
         )
@@ -77,7 +86,7 @@ class ChatPanel:
         
         # Add apply button
         ttk.Button(
-            system_frame, 
+            self.system_frame, 
             text="Apply", 
             command=self.apply_system_prompt,
             style="Accent.TButton"
@@ -405,6 +414,9 @@ class ChatPanel:
         if not timestamp:
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
             
+        # Process content through plugin hooks
+        processed_content = self.process_message_hooks(content, "assistant")
+            
         # Add timestamp
         self.console.insert(
             tk.END,
@@ -422,7 +434,7 @@ class ChatPanel:
         # Add message content
         self.console.insert(
             tk.END,
-            f"{content}\n\n",
+            f"{processed_content}\n\n",
             "irintai_message"
         )
         
@@ -687,3 +699,268 @@ class ChatPanel:
                 "system"
             )
             self.console.see(tk.END)
+
+    # Extension point system for the chat panel
+    def initialize_plugin_hooks(self):
+        """Initialize plugin extension points"""
+        # Dictionary of registered UI hooks by plugin ID
+        self.plugin_ui_extensions = {}
+        
+        # Extension frames
+        self.extension_frames = {
+            "top_bar": ttk.Frame(self.frame),
+            "side_panel": ttk.Frame(self.frame),
+            "bottom_bar": ttk.Frame(self.frame),
+            "floating": None  # Will be created on demand
+        }
+        
+        # Position the extension frames
+        self.extension_frames["top_bar"].pack(fill=tk.X, padx=5, pady=5, after=self.system_frame)
+        
+        # Side panel is positioned to the right of the chat console
+        chat_console_frame = self.console.master
+        chat_console_frame.pack_forget()
+        
+        # Create a horizontal paned window for the main content
+        self.main_paned = ttk.PanedWindow(self.frame, orient=tk.HORIZONTAL)
+        self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Add the chat console back
+        self.main_paned.add(chat_console_frame, weight=3)
+        
+        # Add side panel frame - initially empty
+        self.main_paned.add(self.extension_frames["side_panel"], weight=1)
+        
+        # Bottom bar goes after the input section
+        self.extension_frames["bottom_bar"].pack(fill=tk.X, padx=5, pady=5, after=self.input_frame)
+        
+        # Register notification methods for plugins
+        self.register_plugin_callbacks()
+
+    def register_plugin_callbacks(self):
+        """Register plugin notification callbacks with the plugin manager"""
+        if not hasattr(self.parent, "plugin_manager"):
+            self.log("[Chat Panel] Plugin manager not available")
+            return
+            
+        plugin_manager = self.parent.plugin_manager
+        
+        # Register for plugin lifecycle events
+        plugin_manager.register_event_handler("chat_panel", "plugin_activated", 
+                                             self.on_plugin_activated)
+        plugin_manager.register_event_handler("chat_panel", "plugin_deactivated", 
+                                             self.on_plugin_deactivated)
+        plugin_manager.register_event_handler("chat_panel", "plugin_unloaded", 
+                                             self.on_plugin_unloaded)
+
+    def on_plugin_activated(self, plugin_id, plugin_instance):
+        """
+        Handle plugin activation event
+        
+        Args:
+            plugin_id: ID of the activated plugin
+            plugin_instance: Instance of the plugin
+        """
+        # Check if plugin has UI integration capability
+        if hasattr(plugin_instance, "get_chat_ui_extension"):
+            self.log(f"[Chat Panel] Plugin {plugin_id} has UI integration")
+            
+            try:
+                # Get extension specification from plugin
+                extension = plugin_instance.get_chat_ui_extension(self)
+                
+                if extension and isinstance(extension, dict):
+                    # Store extension
+                    self.plugin_ui_extensions[plugin_id] = extension
+                    
+                    # Process UI components
+                    self.integrate_plugin_ui(plugin_id, extension)
+            except Exception as e:
+                self.log(f"[Chat Panel] Error integrating plugin {plugin_id}: {e}")
+
+    def on_plugin_deactivated(self, plugin_id):
+        """
+        Handle plugin deactivation event
+        
+        Args:
+            plugin_id: ID of the deactivated plugin
+        """
+        # Remove plugin UI if present
+        if plugin_id in self.plugin_ui_extensions:
+            self.remove_plugin_ui(plugin_id)
+
+    def on_plugin_unloaded(self, plugin_id):
+        """
+        Handle plugin unloading event
+        
+        Args:
+            plugin_id: ID of the unloaded plugin
+        """
+        # Ensure plugin UI is fully removed
+        if plugin_id in self.plugin_ui_extensions:
+            self.remove_plugin_ui(plugin_id)
+            del self.plugin_ui_extensions[plugin_id]
+
+    def integrate_plugin_ui(self, plugin_id, extension):
+        """
+        Integrate a plugin's UI components
+        
+        Args:
+            plugin_id: ID of the plugin
+            extension: UI extension specification
+        """
+        # Process each extension location
+        for location, components in extension.items():
+            if location not in self.extension_frames:
+                self.log(f"[Chat Panel] Unknown extension location: {location}")
+                continue
+                
+            # Get the container frame
+            container = self.extension_frames[location]
+            
+            # For floating windows, create a new toplevel if needed
+            if location == "floating" and components:
+                container = tk.Toplevel(self.frame)
+                container.title(f"{plugin_id.capitalize()} Plugin")
+                container.protocol("WM_DELETE_WINDOW", lambda: self.hide_floating_window(plugin_id))
+                container.withdraw()  # Initially hidden
+                self.extension_frames["floating"] = container
+                
+            # Create a frame specific to this plugin
+            plugin_frame = ttk.LabelFrame(container, text=extension.get("title", plugin_id.capitalize()))
+            plugin_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+            
+            # Store the frame reference
+            extension["frame"] = plugin_frame
+            
+            # Add components if any were specified
+            if isinstance(components, list):
+                for component in components:
+                    if hasattr(component, "pack"):
+                        component.pack(in_=plugin_frame, fill=tk.BOTH, expand=True)
+                        
+            # Show the container if it was hidden
+            if location == "side_panel":
+                # Ensure side panel is visible
+                if self.main_paned.pane(self.extension_frames["side_panel"]):
+                    self.main_paned.paneconfig(self.extension_frames["side_panel"], weight=1)
+
+    def remove_plugin_ui(self, plugin_id):
+        """
+        Remove a plugin's UI components
+        
+        Args:
+            plugin_id: ID of the plugin
+        """
+        extension = self.plugin_ui_extensions.get(plugin_id)
+        if not extension:
+            return
+            
+        # Get the plugin frame
+        plugin_frame = extension.get("frame")
+        if plugin_frame and plugin_frame.winfo_exists():
+            plugin_frame.destroy()
+            
+        # If this was a floating window, destroy it
+        if extension.get("location") == "floating" and self.extension_frames["floating"]:
+            floating_window = self.extension_frames["floating"]
+            if floating_window.winfo_exists():
+                floating_window.destroy()
+                self.extension_frames["floating"] = None
+
+    def show_floating_window(self, plugin_id):
+        """
+        Show a plugin's floating window
+        
+        Args:
+            plugin_id: ID of the plugin
+        """
+        extension = self.plugin_ui_extensions.get(plugin_id)
+        if not extension or extension.get("location") != "floating":
+            return
+            
+        # Get the window
+        window = self.extension_frames["floating"]
+        if window and window.winfo_exists():
+            # Position near the main window
+            window.geometry(f"+{self.frame.winfo_rootx() + 50}+{self.frame.winfo_rooty() + 50}")
+            window.deiconify()
+            window.lift()
+
+    def hide_floating_window(self, plugin_id):
+        """
+        Hide a plugin's floating window
+        
+        Args:
+            plugin_id: ID of the plugin
+        """
+        extension = self.plugin_ui_extensions.get(plugin_id)
+        if not extension or extension.get("location") != "floating":
+            return
+            
+        # Get the window
+        window = self.extension_frames["floating"]
+        if window and window.winfo_exists():
+            window.withdraw()
+
+    # Messages API for plugins to interact with the chat
+    def register_message_hook(self, plugin_id, hook_function):
+        """
+        Register a plugin hook for message processing
+        
+        Args:
+            plugin_id: ID of the plugin
+            hook_function: Function to call for message processing
+            
+        Returns:
+            Success flag
+        """
+        if not hasattr(self, "message_hooks"):
+            self.message_hooks = {}
+            
+        self.message_hooks[plugin_id] = hook_function
+        self.log(f"[Chat Panel] Registered message hook for plugin {plugin_id}")
+        return True
+        
+    def unregister_message_hook(self, plugin_id):
+        """
+        Unregister a plugin message hook
+        
+        Args:
+            plugin_id: ID of the plugin
+            
+        Returns:
+            Success flag
+        """
+        if hasattr(self, "message_hooks") and plugin_id in self.message_hooks:
+            del self.message_hooks[plugin_id]
+            self.log(f"[Chat Panel] Unregistered message hook for plugin {plugin_id}")
+            return True
+        return False
+        
+    def process_message_hooks(self, message, role):
+        """
+        Process message hooks from plugins
+        
+        Args:
+            message: Message content
+            role: Message role (user/assistant)
+            
+        Returns:
+            Possibly modified message
+        """
+        if not hasattr(self, "message_hooks") or not self.message_hooks:
+            return message
+            
+        modified_message = message
+        
+        # Apply each hook in registration order
+        for plugin_id, hook_function in self.message_hooks.items():
+            try:
+                result = hook_function(modified_message, role)
+                if result is not None:
+                    modified_message = result
+            except Exception as e:
+                self.log(f"[Chat Panel] Error in message hook for plugin {plugin_id}: {e}")
+        
+        return modified_message

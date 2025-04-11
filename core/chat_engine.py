@@ -131,13 +131,13 @@ class ChatEngine:
         elif "codellama" in model or "deepseek" in model:
             # Specialized for code models
             formatted = f"""
-[INST] 
-{self.system_prompt}
+            [INST] 
+            {self.system_prompt}
 
-{context if context else ''}
-{prompt.strip()}
-[/INST]
-"""
+            {context if context else ''}
+            {prompt.strip()}
+            [/INST]
+            """
             return formatted
         else:
             # Generic format with conversation history

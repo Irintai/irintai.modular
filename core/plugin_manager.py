@@ -9,6 +9,7 @@ import importlib.util
 import threading
 import time
 from typing import Dict, List, Any, Optional, Callable, Type
+from utils.version import VERSION
 
 class PluginError(Exception):
     """Base exception for plugin-related errors"""
@@ -433,3 +434,395 @@ class PluginManager:
             except Exception as e:
                 self.log(f"[Plugin Error] Method call failed: {plugin_name}.{method_name}: {e}")
                 raise
+
+    def register_plugin_ui(self, plugin_name: str, ui_container: Any) -> bool:
+        """
+        Register a plugin's UI components with the main application
+        
+        Args:
+            plugin_name: Name of the plugin
+            ui_container: UI container to register into
+            
+        Returns:
+            True if UI registered successfully, False otherwise
+        """
+        with self._lock:
+            # Check if plugin is active
+            if self.get_plugin_status(plugin_name) != self.PLUGIN_STATUS["ACTIVE"]:
+                self.log(f"[Plugin UI] Cannot register UI for inactive plugin: {plugin_name}")
+                return False
+                
+            # Get plugin instance
+            plugin = self.plugins.get(plugin_name)
+            if not plugin:
+                return False
+                
+            try:
+                # Check for UI activation function
+                if hasattr(plugin, "activate_ui") and callable(plugin.activate_ui):
+                    # Call the UI activation function
+                    result = plugin.activate_ui(ui_container)
+                    
+                    if result:
+                        self.log(f"[Plugin UI] Registered UI components for {plugin_name}")
+                        return True
+                    else:
+                        self.log(f"[Plugin UI] Failed to register UI for {plugin_name}")
+                        return False
+                else:
+                    # Check for UI module with panel
+                    try:
+                        # Attempt to import ui module
+                        module_name = f"plugins.{plugin_name}.ui"
+                        ui_module = importlib.import_module(module_name)
+                        
+                        # Look for activate_ui function at module level
+                        if hasattr(ui_module, "activate_ui") and callable(ui_module.activate_ui):
+                            result = ui_module.activate_ui(ui_container)
+                            
+                            if result:
+                                self.log(f"[Plugin UI] Registered UI from module for {plugin_name}")
+                                return True
+                        
+                        # If no activate_ui function, check for Panel class
+                        if hasattr(ui_module, "Panel"):
+                            panel_class = getattr(ui_module, "Panel")
+                            panel = panel_class(ui_container, plugin)
+                            
+                            # Store panel instance with the plugin
+                            if not hasattr(plugin, "_ui_instances"):
+                                setattr(plugin, "_ui_instances", [])
+                            getattr(plugin, "_ui_instances").append(panel)
+                            
+                            self.log(f"[Plugin UI] Created UI panel for {plugin_name}")
+                            return True
+                            
+                    except ImportError:
+                        self.log(f"[Plugin UI] No UI module found for {plugin_name}")
+                    except Exception as e:
+                        self.log(f"[Plugin UI] Error creating UI for {plugin_name}: {e}")
+                    
+                    return False
+                    
+            except Exception as e:
+                self.log(f"[Plugin UI] Error registering UI for {plugin_name}: {e}")
+                return False
+
+    def check_dependencies(self, plugin_name: str) -> Dict[str, bool]:
+        """
+        Check if all dependencies for a plugin are satisfied
+        
+        Args:
+            plugin_name: Name of the plugin
+            
+        Returns:
+            Dictionary mapping dependency names to satisfaction status
+        """
+        metadata = self.get_plugin_metadata(plugin_name)
+        dependencies = metadata.get("dependencies", {})
+        results = {}
+        
+        # Check Python version
+        if "python" in dependencies:
+            import pkg_resources
+            python_req = dependencies["python"]
+            try:
+                # Use pkg_resources to check version requirement
+                pkg_resources.require(f"python{python_req}")
+                results["python"] = True
+            except pkg_resources.VersionConflict:
+                results["python"] = False
+        
+        # Check Irintai version
+        if "irintai" in dependencies:
+            irintai_req = dependencies["irintai"]
+            try:
+                pkg_resources.require(f"irintai{irintai_req}")
+                results["irintai"] = True
+            except (pkg_resources.VersionConflict, ImportError):
+                results["irintai"] = False
+        
+        # Check external libraries
+        if "external_libs" in dependencies and isinstance(dependencies["external_libs"], list):
+            for lib in dependencies["external_libs"]:
+                try:
+                    importlib.import_module(lib.split(">=")[0].strip())
+                    results[lib] = True
+                except ImportError:
+                    results[lib] = False
+        
+        # Check plugin dependencies
+        if "plugins" in dependencies and isinstance(dependencies["plugins"], list):
+            for dep_plugin in dependencies["plugins"]:
+                # Check if plugin is loaded and active
+                is_satisfied = (
+                    dep_plugin in self.plugins and 
+                    self.get_plugin_status(dep_plugin) == self.PLUGIN_STATUS["ACTIVE"]
+                )
+                results[f"plugin:{dep_plugin}"] = is_satisfied
+        
+        return results
+
+    def install_dependencies(self, plugin_name: str) -> Dict[str, bool]:
+        """
+        Attempt to install missing dependencies for a plugin
+        
+        Args:
+            plugin_name: Name of the plugin
+            
+        Returns:
+            Dictionary mapping dependency names to installation success status
+        """
+        results = {}
+        metadata = self.get_plugin_metadata(plugin_name)
+        dependencies = metadata.get("dependencies", {})
+        
+        # Only attempt to install external libraries
+        if "external_libs" in dependencies and isinstance(dependencies["external_libs"], list):
+            for lib in dependencies["external_libs"]:
+                lib_name = lib.split(">=")[0].strip()
+                
+                try:
+                    # Check if already installed
+                    importlib.import_module(lib_name)
+                    results[lib] = True
+                    continue
+                except ImportError:
+                    pass
+                    
+                # Try to install with pip
+                try:
+                    import subprocess
+                    self.log(f"[Plugin Dependencies] Installing {lib} for {plugin_name}")
+                    
+                    # Run pip install in a subprocess
+                    process = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", lib],
+                        capture_output=True,
+                        text=True,
+                        check=False
+                    )
+                    
+                    if process.returncode == 0:
+                        results[lib] = True
+                        self.log(f"[Plugin Dependencies] Installed {lib}")
+                    else:
+                        results[lib] = False
+                        self.log(f"[Plugin Dependencies] Failed to install {lib}: {process.stderr}")
+                
+                except Exception as e:
+                    results[lib] = False
+                    self.log(f"[Plugin Dependencies] Error installing {lib}: {e}")
+        
+        return results
+
+    def register_event_handler(self, plugin_name: str, event_type: str, handler: Callable) -> bool:
+        """
+        Register a plugin's event handler for a specific event type
+        
+        Args:
+            plugin_name: Name of the plugin
+            event_type: Type of event to handle
+            handler: Function to call when event occurs
+            
+        Returns:
+            True if handler registered successfully, False otherwise
+        """
+        with self._lock:
+            # Initialize event handlers dictionary if needed
+            if not hasattr(self, "_event_handlers"):
+                self._event_handlers = {}
+                
+            # Initialize handlers list for this event type
+            if event_type not in self._event_handlers:
+                self._event_handlers[event_type] = []
+                
+            # Register the handler with plugin info
+            handler_info = {"plugin": plugin_name, "handler": handler}
+            self._event_handlers[event_type].append(handler_info)
+            
+            self.log(f"[Plugin Events] Registered handler for {event_type} from {plugin_name}")
+            return True
+
+    def unregister_event_handler(self, plugin_name: str, event_type: str, handler: Optional[Callable] = None) -> bool:
+        """
+        Unregister a plugin's event handler
+        
+        Args:
+            plugin_name: Name of the plugin
+            event_type: Type of event to unregister from
+            handler: Specific handler to unregister (if None, unregister all for plugin)
+            
+        Returns:
+            True if handler(s) unregistered successfully, False otherwise
+        """
+        with self._lock:
+            # Check if we have any handlers for this event
+            if not hasattr(self, "_event_handlers") or event_type not in self._event_handlers:
+                return False
+                
+            # Find handlers to remove
+            handlers_to_remove = []
+            for handler_info in self._event_handlers[event_type]:
+                if handler_info["plugin"] == plugin_name:
+                    if handler is None or handler_info["handler"] == handler:
+                        handlers_to_remove.append(handler_info)
+            
+            # Remove the handlers
+            for handler_info in handlers_to_remove:
+                self._event_handlers[event_type].remove(handler_info)
+                
+            # Clean up empty lists
+            if not self._event_handlers[event_type]:
+                del self._event_handlers[event_type]
+                
+            self.log(f"[Plugin Events] Unregistered {len(handlers_to_remove)} handlers for {event_type} from {plugin_name}")
+            return len(handlers_to_remove) > 0
+
+    def trigger_event(self, event_type: str, **event_data) -> Dict[str, Any]:
+        """
+        Trigger an event to be handled by registered plugins
+        
+        Args:
+            event_type: Type of event to trigger
+            **event_data: Data to pass to event handlers
+            
+        Returns:
+            Dictionary mapping plugin names to their handler results
+        """
+        results = {}
+        
+        # Check if we have any handlers for this event
+        if not hasattr(self, "_event_handlers") or event_type not in self._event_handlers:
+            return results
+            
+        # Call each handler
+        for handler_info in self._event_handlers[event_type]:
+            plugin_name = handler_info["plugin"]
+            handler = handler_info["handler"]
+            
+            try:
+                # Skip handlers for inactive plugins
+                status = self.get_plugin_status(plugin_name)
+                if status != self.PLUGIN_STATUS["ACTIVE"]:
+                    continue
+                    
+                # Call the handler and store result
+                result = handler(**event_data)
+                results[plugin_name] = result
+                
+            except Exception as e:
+                self.log(f"[Plugin Events] Error in {event_type} handler from {plugin_name}: {e}")
+                results[plugin_name] = {"error": str(e)}
+                
+        return results
+
+    def uninstall_plugin(self, plugin_name: str) -> bool:
+        """
+        Safely uninstall a plugin
+        
+        Args:
+            plugin_name: Name of the plugin to uninstall
+            
+        Returns:
+            True if plugin uninstalled successfully, False otherwise
+        """
+        with self._lock:
+            # Deactivate the plugin if active
+            if self.get_plugin_status(plugin_name) == self.PLUGIN_STATUS["ACTIVE"]:
+                if not self.deactivate_plugin(plugin_name):
+                    self.log(f"[Plugin] Cannot uninstall active plugin {plugin_name}")
+                    return False
+                    
+            try:
+                # Call uninstall method if available
+                if plugin_name in self.plugins:
+                    plugin = self.plugins[plugin_name]
+                    if hasattr(plugin, "uninstall") and callable(plugin.uninstall):
+                        plugin.uninstall()
+                        
+                    # Remove from loaded plugins
+                    del self.plugins[plugin_name]
+                
+                # Remove configuration directory
+                plugin_config_dir = os.path.join(self.config_dir, plugin_name)
+                if os.path.exists(plugin_config_dir):
+                    import shutil
+                    shutil.rmtree(plugin_config_dir)
+                    
+                # Remove status and metadata
+                if plugin_name in self.plugin_statuses:
+                    del self.plugin_statuses[plugin_name]
+                if plugin_name in self.plugin_metadata:
+                    del self.plugin_metadata[plugin_name]
+                    
+                self.log(f"[Plugin] Uninstalled plugin: {plugin_name}")
+                return True
+                
+            except Exception as e:
+                self.log(f"[Plugin Error] Failed to uninstall {plugin_name}: {e}")
+                return False
+
+    def check_for_updates(self, plugin_name: str) -> Dict[str, Any]:
+        """
+        Check if a plugin has updates available
+        
+        Args:
+            plugin_name: Name of the plugin to check
+            
+        Returns:
+            Dictionary with update information
+        """
+        result = {
+            "has_update": False,
+            "current_version": "0.0.0",
+            "latest_version": "0.0.0",
+            "update_url": None,
+            "changelog": None
+        }
+        
+        # Get current version
+        metadata = self.get_plugin_metadata(plugin_name)
+        current_version = metadata.get("version", "0.0.0")
+        result["current_version"] = current_version
+        
+        # Check if plugin has update URL defined
+        update_url = metadata.get("update_url")
+        if not update_url:
+            return result
+            
+        try:
+            # Call plugin's update checking method if available
+            if plugin_name in self.plugins:
+                plugin = self.plugins[plugin_name]
+                if hasattr(plugin, "check_for_updates") and callable(plugin.check_for_updates):
+                    update_info = plugin.check_for_updates()
+                    if update_info and isinstance(update_info, dict):
+                        result.update(update_info)
+                        return result
+            
+            # Basic update check using a JSON file at the update URL
+            import urllib.request
+            import json
+            
+            # Try to fetch update info
+            with urllib.request.urlopen(update_url, timeout=5) as response:
+                update_data = json.loads(response.read().decode())
+                
+                # Get latest version
+                latest_version = update_data.get("version", "0.0.0")
+                result["latest_version"] = latest_version
+                
+                # Check if newer
+                from pkg_resources import parse_version
+                if parse_version(latest_version) > parse_version(current_version):
+                    result["has_update"] = True
+                    result["update_url"] = update_data.get("download_url")
+                    result["changelog"] = update_data.get("changelog")
+                    
+                    self.log(f"[Plugin] Update available for {plugin_name}: {current_version} → {latest_version}")
+                    
+        except Exception as e:
+            self.log(f"[Plugin] Failed to check updates for {plugin_name}: {e}")
+            
+        return result

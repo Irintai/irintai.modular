@@ -13,12 +13,17 @@ import sys
 import tkinter as tk
 from tkinter import ttk
 import traceback
+import threading
+import time
 
 # Create required directories
 os.makedirs("data/models", exist_ok=True)
 os.makedirs("data/logs", exist_ok=True) 
 os.makedirs("data/vector_store", exist_ok=True)
 os.makedirs("data/reflections", exist_ok=True)
+os.makedirs("data/plugins", exist_ok=True)
+os.makedirs("data/plugins/config", exist_ok=True)
+os.makedirs("data/plugins/data", exist_ok=True)
 
 # Import core modules
 from core import (
@@ -26,14 +31,17 @@ from core import (
     ChatEngine, 
     MemorySystem, 
     ConfigManager,
-    PluginManager
+    PluginManager,
+    PluginSDK
 )
 
 # Import utility modules
 from utils import (
     IrintaiLogger,
     SystemMonitor,
-    FileOps
+    FileOps,
+    EventBus,
+    DependencyManager
 )
 
 # Import UI components
@@ -106,45 +114,113 @@ def main():
     
     # Start the application
     try:
+        # Initialize configuration manager first
+        config_manager = ConfigManager(path="data/config.json")
+        
         # Initialize core components with proper dependencies
         model_manager = ModelManager(
             model_path="data/models", 
             logger=logger.log,
-            use_8bit=False
+            config=config_manager,
+            use_8bit=config_manager.get("model.use_8bit", False)
         )
         
-        memory_system = MemorySystem()
-        config_manager = ConfigManager()
+        # Initialize SystemMonitor for resource tracking
+        system_monitor = SystemMonitor(logger=logger.log, config=config_manager)
+        
+        # Start continuous monitoring with configurable interval
+        monitoring_interval = config_manager.get("system.monitoring_interval", 1.0)
+        system_monitor.start_monitoring(interval=monitoring_interval)
+        
+        # Initialize EventBus for inter-plugin communication
+        event_bus = EventBus(logger=logger.log)
+        event_bus.start()  # Start the asynchronous event processing
+        
+        # Initialize MemorySystem
+        memory_system = MemorySystem(
+            vector_store_dir="data/vector_store",
+            logger=logger.log,
+            config=config_manager
+        )
+        
+        # Initialize DependencyManager for plugin dependencies
+        dependency_manager = DependencyManager(logger=logger.log)
         
         # Create ChatEngine with model_manager dependency
         chat_engine = ChatEngine(
             model_manager=model_manager,
             memory_system=memory_system,
             session_file="data/chat_history.json",
+            logger=logger.log,
+            config=config_manager
+        )
+        
+        # Create file operations utility with proper sandboxing
+        file_ops = FileOps(
+            base_dir=os.path.abspath("."),
             logger=logger.log
         )
         
-        # Create plugin manager
-        plugin_manager = PluginManager(
-            plugin_dir="plugins",
-            config_dir="data/plugins",
-            logger=logger.log,
-            core_system=None  # Can be updated later if needed
-        )
-        
-        # Combine components in core_app dictionary
-        core_app = {
+        # Create a template core system for plugins
+        core_system = {
             "model_manager": model_manager,
             "chat_engine": chat_engine,
             "memory_system": memory_system,
             "config_manager": config_manager,
-            "plugin_manager": plugin_manager,
-            "logger": logger
+            "logger": logger,
+            "system_monitor": system_monitor,
+            "event_bus": event_bus,
+            "file_ops": file_ops
         }
         
+        # Create plugin manager with all dependencies
+        plugin_manager = PluginManager(
+            plugin_dir="plugins",
+            config_dir="data/plugins/config",
+            data_dir="data/plugins/data",
+            logger=logger.log,
+            core_system=core_system,
+            event_bus=event_bus,
+            dependency_manager=dependency_manager
+        )
+        
+        # Register plugin manager with the core system
+        core_system["plugin_manager"] = plugin_manager
+        
         # Create main window with core_app
-        app = MainWindow(root, core_app=core_app)
+        app = MainWindow(root, core_app=core_system)
+        
+        # Log application start
+        logger.log("Irintai Assistant started successfully")
+        
+        # Auto-load plugins if configured
+        if config_manager.get("plugins.auto_load", True):
+            def delayed_plugin_loading():
+                # Wait for UI to initialize
+                time.sleep(1)
+                logger.log("Auto-loading plugins...")
+                plugin_manager.auto_load_plugins()
+                
+            # Start plugin loading in a separate thread
+            threading.Thread(target=delayed_plugin_loading, daemon=True).start()
+        
+        # Start the UI main loop
         root.mainloop()
+        
+        # Perform cleanup when the application exits
+        logger.log("Shutting down Irintai Assistant...")
+        
+        # Stop event bus
+        event_bus.stop()
+        
+        # Stop system monitoring
+        system_monitor.stop_monitoring()
+        
+        # Unload all plugins
+        plugin_manager.unload_all_plugins()
+        
+        # Log application exit
+        logger.log("Irintai Assistant shut down successfully")
         
     except Exception as e:
         # Log the exception

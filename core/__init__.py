@@ -1,20 +1,15 @@
-"""
-Core module initialization for Irintai assistant
-"""
-# Import all core modules for easy access
-from .model_manager import ModelManager, MODEL_STATUS, RECOMMENDED_MODELS
+from .model_manager import ModelManager
 from .chat_engine import ChatEngine
 from .memory_system import MemorySystem
-from .config_manager import ConfigManager, DEFAULT_CONFIG
+from .config_manager import ConfigManager
 from .plugin_manager import PluginManager
+from .plugin_sdk import PluginSDK
 
 __all__ = [
-    'ModelManager', 
-    'MODEL_STATUS', 
-    'RECOMMENDED_MODELS',
+    'ModelManager',
     'ChatEngine',
     'MemorySystem',
-    'ConfigManager', 
-    'DEFAULT_CONFIG'
-    'PluginManager'
+    'ConfigManager',
+    'PluginManager',
+    'PluginSDK'
 ]

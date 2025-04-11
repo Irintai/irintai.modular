@@ -714,6 +714,21 @@ class ConfigPanel:
         config["start_minimized"] = self.start_minimized_var.get()
         config["confirm_exit"] = self.confirm_exit_var.get()
         
+        # Collect plugin settings
+        for plugin_id, settings_widget in self.plugin_settings_widgets.items():
+            # Check if widget has get_settings method
+            if hasattr(settings_widget, "get_settings"):
+                try:
+                    # Get settings from plugin
+                    plugin_settings = settings_widget.get_settings()
+                    
+                    if plugin_settings:
+                        # Add plugin settings with plugin_id prefix
+                        for key, value in plugin_settings.items():
+                            config[f"{plugin_id}.{key}"] = value
+                except Exception as e:
+                    self.log(f"[Config] Error getting settings from plugin {plugin_id}: {e}")
+        
         # Update config manager
         self.config_manager.update(config)
         
@@ -833,6 +848,16 @@ class ConfigPanel:
         # Update chat engine settings
         self.chat_engine.set_system_prompt(self.system_prompt_var.get())
         self.chat_engine.set_memory_mode(self.memory_mode_var.get())
+        
+        # Apply plugin settings
+        for plugin_id, settings_widget in self.plugin_settings_widgets.items():
+            # Check if widget has apply_settings method
+            if hasattr(settings_widget, "apply_settings"):
+                try:
+                    # Apply settings
+                    settings_widget.apply_settings()
+                except Exception as e:
+                    self.log(f"[Config] Error applying settings for plugin {plugin_id}: {e}")
         
         # Call the callback to notify parent
         if self.on_config_updated_callback:

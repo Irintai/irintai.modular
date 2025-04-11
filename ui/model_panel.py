@@ -64,6 +64,40 @@ class ModelPanel:
         # Create progress bar
         self.create_progress_bar()
         
+        # Initialize plugin extensions
+        self.initialize_plugin_extensions()
+
+    def initialize_plugin_extensions(self):
+        """Initialize plugin extensions for the model panel"""
+        # Dictionaries for plugin extensions
+        self.plugin_model_providers = {}  # Custom model providers
+        self.plugin_model_configs = {}    # Custom model configurations
+        self.plugin_ui_extensions = {}    # UI extensions
+        self.plugin_actions = {}          # Custom model actions
+        
+        # Create plugin extension frames
+        self.plugin_frame = ttk.LabelFrame(self.frame, text="Plugin Extensions")
+        
+        # Add plugin action menu
+        self.create_plugin_action_menu()
+        
+        # Register with plugin manager if available
+        if hasattr(self.parent, "plugin_manager"):
+            plugin_manager = self.parent.plugin_manager
+            
+            # Register for plugin events
+            plugin_manager.register_event_handler("model_panel", "plugin_activated", 
+                                                 self.on_plugin_activated)
+            plugin_manager.register_event_handler("model_panel", "plugin_deactivated", 
+                                                 self.on_plugin_deactivated)
+            plugin_manager.register_event_handler("model_panel", "plugin_unloaded", 
+                                                 self.on_plugin_unloaded)
+            
+            # Get all active plugins and register their extensions
+            active_plugins = plugin_manager.get_active_plugins()
+            for plugin_id, plugin in active_plugins.items():
+                self.register_plugin_extension(plugin_id, plugin)
+        
     def create_model_selection(self):
         """Create the model selection section"""
         selection_frame = ttk.LabelFrame(self.frame, text="Model Selection")
@@ -204,6 +238,40 @@ class ModelPanel:
             command=self.open_model_folder
         ).pack(side=tk.RIGHT, padx=5)
         
+        # Create menu for plugin-provided model actions
+        self.create_plugin_action_menu()
+        
+    def create_plugin_action_menu(self):
+        """Create menu for plugin-provided model actions"""
+        # Find appropriate frame to add menu
+        actions_frame = None
+        for child in self.frame.winfo_children():
+            if isinstance(child, ttk.LabelFrame) and child.cget("text") == "Model Management":
+                # Get the first child frame which should be the actions frame
+                actions_frame = child.winfo_children()[0]
+                break
+                
+        if not actions_frame:
+            return
+            
+        # Create a menubutton for plugin actions
+        self.plugin_action_button = ttk.Menubutton(
+            actions_frame,
+            text="Plugin Actions",
+            direction="below"
+        )
+        self.plugin_action_button.pack(side=tk.RIGHT, padx=5)
+        
+        # Create the dropdown menu
+        self.plugin_action_menu = tk.Menu(self.plugin_action_button, tearoff=0)
+        self.plugin_action_button["menu"] = self.plugin_action_menu
+        
+        # Add placeholder when empty
+        self.plugin_action_menu.add_command(
+            label="No plugin actions available",
+            state=tk.DISABLED
+        )
+        
     def create_model_info(self):
         """Create the model information section"""
         info_frame = ttk.LabelFrame(self.frame, text="Model Information")
@@ -302,6 +370,21 @@ class ModelPanel:
             # Fetch remote models
             all_models = self.model_manager.fetch_available_models()
             
+            # Add plugin-provided models
+            plugin_models = self._get_plugin_models()
+            
+            # Merge lists, prioritizing plugin models if there are duplicates
+            if plugin_models:
+                # Create a dictionary with model name as key
+                model_dict = {model["name"]: model for model in all_models}
+                
+                # Update or add plugin models
+                for model in plugin_models:
+                    model_dict[model["name"]] = model
+                    
+                # Convert back to list
+                all_models = list(model_dict.values())
+            
             # Queue UI update instead of direct call
             self.update_queue.put((self._update_model_tree, [all_models], {}))
         except Exception as e:
@@ -311,6 +394,37 @@ class ModelPanel:
             # Queue progress bar reset
             self.update_queue.put((self._reset_progress_bar, [], {}))
             
+    def _get_plugin_models(self):
+        """
+        Get models from plugin providers
+        
+        Returns:
+            List of model dictionaries
+        """
+        plugin_models = []
+        
+        # Skip if no providers
+        if not hasattr(self, "plugin_model_providers"):
+            return plugin_models
+            
+        # Call each provider
+        for provider_id, provider_func in self.plugin_model_providers.items():
+            try:
+                # Get models from this provider
+                models = provider_func()
+                
+                if models and isinstance(models, list):
+                    # Add provider info to each model
+                    for model in models:
+                        if isinstance(model, dict) and "name" in model:
+                            # Add provider ID
+                            model["provider"] = provider_id
+                            plugin_models.append(model)
+            except Exception as e:
+                self.log(f"[Error] Plugin model provider {provider_id} failed: {e}")
+                
+        return plugin_models
+
     def _update_model_tree(self, models_list):
         """
         Update the model tree with fetched models
@@ -624,6 +738,38 @@ class ModelPanel:
         self.uninstall_button.config(state=tk.DISABLED)
         self.start_button.config(state=tk.DISABLED)
         
+    def get_model_config(self, model_name):
+        """
+        Get model configuration including any plugin customizations
+        
+        Args:
+            model_name: Name of the model
+            
+        Returns:
+            Dictionary with model configuration
+        """
+        # Start with default configuration
+        config = self.model_manager.get_model_config(model_name)
+        
+        # Apply plugin configurations if any
+        if hasattr(self, "plugin_model_configs"):
+            # Find specific configurations for this model
+            for config_id, config_func in self.plugin_model_configs.items():
+                try:
+                    # Check if this config applies to this model
+                    model_part = config_id.split(".", 1)[1]  # Get part after plugin ID
+                    if model_part == "*" or model_part == model_name:
+                        # Apply configuration
+                        plugin_config = config_func(model_name, config.copy())
+                        if plugin_config and isinstance(plugin_config, dict):
+                            # Update configuration
+                            config.update(plugin_config)
+                            
+                except Exception as e:
+                    self.log(f"[Error] Model config {config_id} failed: {e}")
+                    
+        return config
+    
     def start_selected_model(self):
         """Start the selected model"""
         selection = self.model_tree.selection()
@@ -642,7 +788,7 @@ class ModelPanel:
                 f"Another model is already running. Stop it and start '{model_name}' instead?",
                 icon=messagebox.WARNING
             )
-            
+                
             if result:
                 self.model_manager.stop_model()
             else:
@@ -669,8 +815,11 @@ class ModelPanel:
                 self.frame.after(0, lambda: self._reset_progress_bar())
                 self.frame.after(0, lambda: self.status_var.set(f"Error: {data}"))
                 
-        # Start the model
-        success = self.model_manager.start_model(model_name, on_model_event)
+        # Get model configuration with plugin customizations
+        model_config = self.get_model_config(model_name)
+        
+        # Start the model with config
+        success = self.model_manager.start_model(model_name, on_model_event, model_config)
         
         if success:
             # Update tree item
@@ -678,13 +827,13 @@ class ModelPanel:
                 item, 
                 values=(model_name, values[1], MODEL_STATUS["LOADING"], values[3])
             )
-            
+                
             # Disable buttons during loading
             self.install_button.config(state=tk.DISABLED)
             self.uninstall_button.config(state=tk.DISABLED)
             self.start_button.config(state=tk.DISABLED)
             self.stop_button.config(state=tk.NORMAL)
-            
+                
             # Select this model for use
             self.select_current_model()
         else:
@@ -824,3 +973,221 @@ class ModelPanel:
         finally:
             # Schedule next queue check
             self.frame.after(100, self.process_queue)
+            
+    def execute_plugin_action(self, action_id):
+        """
+        Execute a plugin-provided model action
+        
+        Args:
+            action_id: ID of the action to execute
+        """
+        if action_id not in self.plugin_actions:
+            return
+            
+        # Get selected model
+        selection = self.model_tree.selection()
+        if not selection:
+            messagebox.showinfo("No Model Selected", "Please select a model first")
+            return
+            
+        # Get model name
+        item = selection[0]
+        values = self.model_tree.item(item, "values")
+        model_name = values[0]
+        
+        try:
+            # Execute the action
+            action_func = self.plugin_actions[action_id]["function"]
+            result = action_func(model_name, self)
+            
+            # Show result if provided
+            if result and isinstance(result, str):
+                messagebox.showinfo("Action Result", result)
+                
+            self.log(f"[Model Panel] Executed action {action_id} on model {model_name}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+            self.log(f"[Model Panel] Error executing action {action_id}: {e}")
+
+    def register_plugin_extension(self, plugin_id, plugin):
+        """
+        Register plugin extensions for the model panel
+        
+        Args:
+            plugin_id: Plugin identifier
+            plugin: Plugin instance
+        """
+        # Skip if plugin doesn't have model extensions
+        if not hasattr(plugin, "get_model_extensions"):
+            return
+            
+        try:
+            # Get extensions from plugin
+            extensions = plugin.get_model_extensions()
+            
+            if not extensions or not isinstance(extensions, dict):
+                return
+                
+            # Register model providers
+            if "model_providers" in extensions and isinstance(extensions["model_providers"], dict):
+                for name, provider_func in extensions["model_providers"].items():
+                    if callable(provider_func):
+                        self.plugin_model_providers[f"{plugin_id}.{name}"] = provider_func
+                
+            # Register model configurations
+            if "model_configs" in extensions and isinstance(extensions["model_configs"], dict):
+                for model_name, config_func in extensions["model_configs"].items():
+                    if callable(config_func):
+                        self.plugin_model_configs[f"{plugin_id}.{model_name}"] = config_func
+                        
+            # Register model actions
+            if "model_actions" in extensions and isinstance(extensions["model_actions"], dict):
+                for action_name, action_func in extensions["model_actions"].items():
+                    if callable(action_func):
+                        self.plugin_actions[f"{plugin_id}.{action_name}"] = {
+                            "function": action_func,
+                            "label": action_name.replace("_", " ").title()
+                        }
+            
+            # Register UI extensions
+            if "ui_extensions" in extensions and isinstance(extensions["ui_extensions"], list):
+                self.add_plugin_ui_extensions(plugin_id, extensions["ui_extensions"])
+                
+            # Update UI to reflect new extensions            
+            self.update_plugin_action_menu()
+            
+            # Refresh model list to include custom models if any
+            if "model_providers" in extensions:
+                self.refresh_model_list()
+            
+            self.log(f"[Model Panel] Registered extensions from plugin: {plugin_id}")
+            
+        except Exception as e:
+            self.log(f"[Model Panel] Error registering extensions from plugin {plugin_id}: {e}")
+
+    def unregister_plugin_extension(self, plugin_id):
+        """
+        Unregister plugin extensions
+        
+        Args:
+            plugin_id: Plugin identifier
+        """
+        # Remove model providers
+        providers_to_remove = [k for k in self.plugin_model_providers if k.startswith(f"{plugin_id}.")]
+        for provider_id in providers_to_remove:
+            del self.plugin_model_providers[provider_id]
+        
+        # Remove model configs
+        configs_to_remove = [k for k in self.plugin_model_configs if k.startswith(f"{plugin_id}.")]
+        for config_id in configs_to_remove:
+            del self.plugin_model_configs[config_id]
+        
+        # Remove actions
+        actions_to_remove = [k for k in self.plugin_actions if k.startswith(f"{plugin_id}.")]
+        for action_id in actions_to_remove:
+            del self.plugin_actions[action_id]
+        
+        # Remove UI extensions
+        if plugin_id in self.plugin_ui_extensions:
+            for extension in self.plugin_ui_extensions[plugin_id]:
+                if extension.winfo_exists():
+                    extension.destroy()
+            del self.plugin_ui_extensions[plugin_id]
+        
+        # Update UI to reflect removed extensions
+        self.update_plugin_action_menu()
+        
+        # Hide plugin frame if no more extensions
+        if not any(self.plugin_ui_extensions.values()) and self.plugin_frame.winfo_ismapped():
+            self.plugin_frame.pack_forget()
+            
+        # Refresh model list if we removed model providers
+        if any(provider.startswith(f"{plugin_id}.") for provider in providers_to_remove):
+            self.refresh_model_list()
+        
+        self.log(f"[Model Panel] Unregistered extensions from plugin: {plugin_id}")
+
+    def add_plugin_ui_extensions(self, plugin_id, extensions):
+        """
+        Add plugin UI extensions to the model panel
+        
+        Args:
+            plugin_id: Plugin identifier
+            extensions: List of UI extension widgets
+        """
+        # Skip if no extensions
+        if not extensions:
+            return
+            
+        # Create container for this plugin if needed
+        if plugin_id not in self.plugin_ui_extensions:
+            self.plugin_ui_extensions[plugin_id] = []
+        
+        # Add each extension
+        for extension in extensions:
+            if isinstance(extension, tk.Widget):
+                # Add to plugin frame
+                extension.pack(in_=self.plugin_frame, fill=tk.X, padx=5, pady=2)
+                
+                # Add to our tracking list
+                self.plugin_ui_extensions[plugin_id].append(extension)
+        
+        # Show the plugin frame if not already visible
+        if not self.plugin_frame.winfo_ismapped() and any(self.plugin_ui_extensions.values()):
+            self.plugin_frame.pack(fill=tk.X, padx=10, pady=10, before=self.frame.winfo_children()[2])
+
+    def update_plugin_action_menu(self):
+        """Update the plugin action menu with registered actions"""
+        # Skip if menu doesn't exist
+        if not hasattr(self, "plugin_action_menu"):
+            return
+            
+        # Clear existing items
+        self.plugin_action_menu.delete(0, tk.END)
+        
+        # Add plugin actions
+        if self.plugin_actions:
+            for action_id, action_info in sorted(self.plugin_actions.items(), key=lambda x: x[1]["label"]):
+                # Add to menu
+                self.plugin_action_menu.add_command(
+                    label=action_info["label"],
+                    command=lambda aid=action_id: self.execute_plugin_action(aid)
+                )
+        else:
+            # Add placeholder
+            self.plugin_action_menu.add_command(
+                label="No plugin actions available",
+                state=tk.DISABLED
+            )
+
+    def on_plugin_activated(self, plugin_id, plugin_instance):
+        """
+        Handle plugin activation event
+        
+        Args:
+            plugin_id: ID of activated plugin
+            plugin_instance: Plugin instance
+        """
+        # Register model extensions for newly activated plugin
+        self.register_plugin_extension(plugin_id, plugin_instance)
+
+    def on_plugin_deactivated(self, plugin_id):
+        """
+        Handle plugin deactivation event
+        
+        Args:
+            plugin_id: ID of deactivated plugin
+        """
+        # Unregister model extensions
+        self.unregister_plugin_extension(plugin_id)
+
+    def on_plugin_unloaded(self, plugin_id):
+        """
+        Handle plugin unloading event
+        
+        Args:
+            plugin_id: ID of unloaded plugin
+        """
+        # Ensure extensions are unregistered
+        self.unregister_plugin_extension(plugin_id)
