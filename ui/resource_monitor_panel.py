@@ -1496,7 +1496,145 @@ class ResourceMonitorPanel:
                     
         except Exception as e:
             self.log(f"Error updating custom metrics data: {e}", "ERROR")
-            
+
+    def refresh(self): # <<< ADD THIS METHOD
+        """Manually refresh the displayed metrics."""
+        self.log("Manual refresh triggered")
+        # Stop the automatic timer temporarily to avoid race conditions
+        is_running = self.running
+        if is_running:
+            self.stop_monitoring()
+
+        # Force an immediate update of metrics
+        # We can call the logic from update_metrics directly here
+        # Or, if update_metrics is complex, extract the core update logic
+        # into a helper method called by both refresh() and update_metrics().
+        # For simplicity, let's reuse the update_metrics core logic:
+        try:
+            if self.system_monitor:
+                # Get system info
+                system_info = self.system_monitor.get_system_info()
+
+                # Update top labels
+                cpu_usage = system_info["cpu"]["usage_percent"]
+                self.cpu_label.config(text=f"CPU: {cpu_usage:.1f}%")
+
+                ram_usage = system_info["ram"]["usage_percent"]
+                self.ram_label.config(text=f"RAM: {ram_usage:.1f}%")
+
+                gpu_usage = system_info["gpu"]["usage_percent"]
+                self.gpu_label.config(text=f"GPU: {gpu_usage}")
+
+                disk_usage = system_info["disk"]["usage_percent"]
+                self.disk_label.config(text=f"Disk: {disk_usage:.1f}%")
+
+                # Update system tab details
+                self.update_system_details(system_info)
+
+                # Update processes tab
+                self.update_processes()
+
+                # Update plugin metrics tab
+                self.update_plugin_metrics()
+
+                # Note: We don't update the graph data here, as refresh
+                #       is usually for the static displays, not the time-series graph.
+                #       If graph update is desired, uncomment graph update lines from
+                #       update_metrics here.
+
+            else:
+                # Handle case where system_monitor is not available
+                 self.log("System monitor not available for refresh.", "WARNING")
+
+
+        except Exception as e:
+            self.log(f"Error during manual refresh: {e}", "ERROR")
+
+        # Restart the automatic timer if it was running
+        if is_running:
+            self.start_monitoring()
+
+
+    def update_metrics(self):
+        """Update resource metrics display"""
+        if not self.running:
+            return
+
+        try:
+            if self.system_monitor:
+                # Get system info
+                system_info = self.system_monitor.get_system_info()
+
+                # Update top labels
+                cpu_usage = system_info["cpu"]["usage_percent"]
+                self.cpu_label.config(text=f"CPU: {cpu_usage:.1f}%")
+
+                ram_usage = system_info["ram"]["usage_percent"]
+                self.ram_label.config(text=f"RAM: {ram_usage:.1f}%")
+
+                gpu_usage = system_info["gpu"]["usage_percent"]
+                self.gpu_label.config(text=f"GPU: {gpu_usage}")
+
+                disk_usage = system_info["disk"]["usage_percent"]
+                self.disk_label.config(text=f"Disk: {disk_usage:.1f}%")
+
+                # Update graph data
+                self.cpu_data.append(cpu_usage)
+                self.cpu_data.pop(0)
+
+                self.ram_data.append(ram_usage)
+                self.ram_data.pop(0)
+
+                try:
+                    if gpu_usage != "N/A":
+                        gpu_value = float(gpu_usage.replace("%", ""))
+                    else:
+                        gpu_value = 0
+                except:
+                    gpu_value = 0
+
+                self.gpu_data.append(gpu_value)
+                self.gpu_data.pop(0)
+
+                # Update custom metrics
+                self.update_custom_metrics_data()
+
+                # Update graph lines
+                self.cpu_line.set_ydata(self.cpu_data)
+                self.ram_line.set_ydata(self.ram_data)
+                self.gpu_line.set_ydata(self.gpu_data)
+
+                for key, info in self.custom_metrics.items():
+                    if info["line"]:
+                        info["line"].set_ydata(info["data"])
+
+                # Draw the canvas
+                self.canvas.draw_idle()
+
+                # Update system tab details
+                self.update_system_details(system_info)
+
+                # Update processes tab
+                self.update_processes()
+
+                # Update plugin metrics tab
+                self.update_plugin_metrics()
+
+            else:
+                # No system monitor available
+                self.cpu_label.config(text="CPU: N/A")
+                self.ram_label.config(text="RAM: N/A")
+                self.gpu_label.config(text="GPU: N/A")
+                self.disk_label.config(text="Disk: N/A")
+
+        except Exception as e:
+            self.log(f"Error updating metrics: {e}", "ERROR")
+
+        finally:
+            # Schedule next update only if still running
+            if self.running:
+                self.update_timer_id = self.frame.after(self.update_interval, self.update_metrics)
+
     def update_system_details(self, system_info: Dict[str, Any]):
         """
         Update the system details treeview

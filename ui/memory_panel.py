@@ -1,3 +1,4 @@
+# File: ui/memory_panel.py
 """
 Memory panel UI component for the Irintai assistant
 """
@@ -5,15 +6,16 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import threading
 import time
+import os # <<< ADD THIS LINE
 from typing import Callable, Dict, List, Any, Optional
 
 class MemoryPanel:
     """Memory management panel for vector embeddings and knowledge retrieval"""
-    
+
     def __init__(self, parent, memory_system, file_ops, logger: Callable, chat_engine):
         """
         Initialize the memory panel
-        
+
         Args:
             parent: Parent widget
             memory_system: MemorySystem instance
@@ -26,13 +28,13 @@ class MemoryPanel:
         self.file_ops = file_ops
         self.log = logger
         self.chat_engine = chat_engine
-        
+
         # Create the main frame
         self.frame = ttk.Frame(parent)
-        
+
         # Initialize UI components
         self.initialize_ui()
-        
+
         # Load memory stats
         self.refresh_stats()
         
@@ -57,28 +59,73 @@ class MemoryPanel:
         self.plugin_processors = {}  # Memory processors
         self.plugin_exporters = {}  # Document exporters
         self.plugin_ui_extensions = {}  # UI extensions
-        
+
         # Create plugin extension frame (initially hidden)
         self.plugin_frame = ttk.LabelFrame(self.frame, text="Plugin Extensions")
-        
+
+        # Get the main window instance if possible (to access menus)
+        self.main_window = self._find_main_window()
+
         # Register with plugin manager if available
-        if hasattr(self.parent, "plugin_manager"):
-            plugin_manager = self.parent.plugin_manager
-            
+        if self.main_window and hasattr(self.main_window, "plugin_manager"):
+            plugin_manager = self.main_window.plugin_manager
+
             # Register for plugin events
-            plugin_manager.register_event_handler("memory_panel", "plugin_activated", 
+            plugin_manager.register_event_handler("memory_panel", "plugin_activated",
                                                  self.on_plugin_activated)
-            plugin_manager.register_event_handler("memory_panel", "plugin_deactivated", 
+            plugin_manager.register_event_handler("memory_panel", "plugin_deactivated",
                                                  self.on_plugin_deactivated)
-            plugin_manager.register_event_handler("memory_panel", "plugin_unloaded", 
+            plugin_manager.register_event_handler("memory_panel", "plugin_unloaded",
                                                  self.on_plugin_unloaded)
-            
+
             # Get all active plugins and register their extensions
             active_plugins = plugin_manager.get_active_plugins()
             for plugin_id, plugin in active_plugins.items():
                 self.register_plugin_extension(plugin_id, plugin)
-                
-        # Update the import/export menus with plugin options
+
+        # Update the import/export menus with plugin options <<< CALL IS NOW VALID
+        self.update_plugin_menus()
+
+    def update_plugin_menus(self): # <<< ADD THIS METHOD
+        """Update UI menus with plugin-provided importers and exporters."""
+        self.log("[Memory Panel] Updating plugin menus...")
+
+        # --- Importers Menu ---
+        # Find or create an "Import" menu (e.g., under a "File" menu in MainWindow)
+        # This part needs integration with MainWindow's menu structure.
+        # For now, we'll just log the importers.
+        if self.plugin_importers:
+            self.log(f"  Available Importers: {list(self.plugin_importers.keys())}")
+            # Example of how you might add to a menu if self.import_menu exists:
+            # self.import_menu.delete(0, tk.END) # Clear existing
+            # for importer_id, func in self.plugin_importers.items():
+            #     label = importer_id.replace("_", " ").title() # Simple formatting
+            #     self.import_menu.add_command(label=label, command=lambda iid=importer_id: self.run_plugin_importer(iid))
+        else:
+            self.log("  No plugin importers registered.")
+
+
+        # --- Exporters Menu ---
+        # Find or create an "Export" menu
+        # Similar logic as importers.
+        if self.plugin_exporters:
+            self.log(f"  Available Exporters: {list(self.plugin_exporters.keys())}")
+            # Example menu integration:
+            # self.export_menu.delete(0, tk.END) # Clear existing
+            # for exporter_id, func in self.plugin_exporters.items():
+            #     label = exporter_id.replace("_", " ").title()
+            #     self.export_menu.add_command(label=label, command=lambda eid=exporter_id: self.run_plugin_exporter(eid))
+        else:
+             self.log("  No plugin exporters registered.")
+
+    def _find_main_window(self): # <<< ADD HELPER METHOD
+        """Helper to find the MainWindow instance."""
+        widget = self.parent
+        while widget:
+            if hasattr(widget, 'core_app'): # Check for a distinctive attribute of MainWindow
+                return widget
+            widget = widget.master
+        return None
         self.update_plugin_menus()
         
     def create_memory_management(self):

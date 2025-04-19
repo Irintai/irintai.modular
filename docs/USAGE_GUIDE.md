@@ -212,13 +212,60 @@ Generate summaries of your conversations:
 2. Reflections are saved to `data/reflections/session_reflections.json`
 3. These can be useful for reviewing past interactions
 
-### Diagnostics
+### Diagnostics and Troubleshooting
 
-The application provides tools for troubleshooting:
+### Using Diagnostic Tools
 
-1. Go to the "Models" tab
-2. Click "Diagnose Model Issues" to check for common problems
-3. The diagnostic report will identify issues with model paths, services, and more
+Irintai Assistant includes powerful diagnostic tools to help identify and resolve issues:
+
+1. **Basic Diagnostics**
+
+   Run the basic diagnostic check to verify your installation and configuration:
+   ```powershell
+   python diagnostics.py
+   ```
+   
+   This checks:
+   - Required dependencies
+   - Configuration file validity
+   - Basic system setup
+
+2. **Enhanced Diagnostics**
+
+   For a comprehensive system check, use:
+   ```powershell
+   python enhanced_diagnostics.py
+   ```
+   
+   This performs advanced checks:
+   - Plugin manager interface validation
+   - Missing method detection
+   - UI thread safety issues
+   - Configuration validation
+   - Log analysis
+   
+   The enhanced diagnostics will generate a report (`irintai_diagnostic_report.txt`) with recommendations.
+
+3. **Auto-Repair Tools**
+
+   To automatically fix common plugin issues:
+   ```powershell
+   python fix_plugin_manager.py
+   ```
+   
+   This repairs common plugin manager problems like missing methods.
+
+### Handling Plugin Errors
+
+If you encounter issues with specific plugins:
+
+1. Navigate to the **Plugins** tab
+2. Right-click on the problematic plugin
+3. Select **View Log** to see plugin-specific error messages
+4. Use **Reload Plugin** to attempt to fix loading issues
+5. If problems persist, use **Deactivate Plugin** to disable it
+
+For persistent issues, run the enhanced diagnostic tool to identify the root cause.
 
 ## Tips and Best Practices
 

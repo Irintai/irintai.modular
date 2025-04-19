@@ -8,8 +8,19 @@ managing embeddings for context-aware responses, and configuring various aspects
 of the assistant.
 """
 
+# Suppress TensorFlow logging messages
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # 0=all, 1=info+warn+error, 2=warn+error, 3=error only
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '1'  # Keep optimizations but suppress the message
+# Suppress TensorFlow deprecation warnings
+os.environ['TF_ENABLE_DEPRECATION_WARNINGS'] = '0'  # Disable deprecation warnings completely
+
 import sys
+import warnings
+# Filter TensorFlow deprecation warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='tensorflow')
+warnings.filterwarnings('ignore', message='.*The name tf\..*is deprecated.*')
+
 import tkinter as tk
 from tkinter import ttk
 import traceback
@@ -119,30 +130,27 @@ def main():
         
         # Initialize core components with proper dependencies
         model_manager = ModelManager(
-            model_path="data/models", 
+            model_path="data/models",
             logger=logger.log,
             config=config_manager,
             use_8bit=config_manager.get("model.use_8bit", False)
         )
-        
+
         # Initialize SystemMonitor for resource tracking
         system_monitor = SystemMonitor(logger=logger.log, config=config_manager)
-        
+
         # Start continuous monitoring with configurable interval
         monitoring_interval = config_manager.get("system.monitoring_interval", 1.0)
         system_monitor.start_monitoring(interval=monitoring_interval)
-        
+
         # Initialize EventBus for inter-plugin communication
         event_bus = EventBus(logger=logger.log)
-        event_bus.start()  # Start the asynchronous event processing
-        
-        # Initialize MemorySystem
+        event_bus.start()  # Start the asynchronous event processing        # Initialize MemorySystem
         memory_system = MemorySystem(
-            vector_store_dir="data/vector_store",
-            logger=logger.log,
-            config=config_manager
+            index_path="data/vector_store/vector_store.json",
+            logger=logger.log
         )
-        
+
         # Initialize DependencyManager for plugin dependencies
         dependency_manager = DependencyManager(logger=logger.log)
         
@@ -151,13 +159,11 @@ def main():
             model_manager=model_manager,
             memory_system=memory_system,
             session_file="data/chat_history.json",
-            logger=logger.log,
-            config=config_manager
+            logger=logger.log
         )
         
         # Create file operations utility with proper sandboxing
         file_ops = FileOps(
-            base_dir=os.path.abspath("."),
             logger=logger.log
         )
         
@@ -172,17 +178,19 @@ def main():
             "event_bus": event_bus,
             "file_ops": file_ops
         }
-        
-        # Create plugin manager with all dependencies
+          # Create plugin manager with all dependencies
         plugin_manager = PluginManager(
             plugin_dir="plugins",
             config_dir="data/plugins/config",
-            data_dir="data/plugins/data",
             logger=logger.log,
             core_system=core_system,
-            event_bus=event_bus,
-            dependency_manager=dependency_manager
         )
+        
+        # Patch the plugin manager with any missing attributes/methods
+        # This prevents AttributeError crashes if methods are missing
+        from utils.runtime_patching import patch_plugin_manager
+        plugin_manager = patch_plugin_manager(plugin_manager)
+        logger.log("[System] Verified plugin manager interface")
         
         # Register plugin manager with the core system
         core_system["plugin_manager"] = plugin_manager

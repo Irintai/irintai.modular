@@ -1,24 +1,23 @@
-# File: plugins/model_training_performance/__init__.py
 """
-Model Training Performance Plugin - Entry Point
+Network Monitoring Plugin - Entry Point
 """
 
 # Import the core plugin class
-from .core.model_training_performance import IrintaiPlugin as CorePlugin
+from .core.network_monitoring import IrintaiPlugin as CorePlugin
 
 # Define plugin metadata (can be copied or referenced from the core class if static)
 METADATA = {
-    "name": "Model Training Performance Monitor",
-    "description": "Monitors and tracks model performance metrics during inference/usage.",
+    "name": "Network Monitor",
+    "description": "Monitors network traffic and API endpoint status.",
     "version": "1.0.0",
     "author": "Irintai Project Contributor", # Placeholder author
-    "url": "https://example.com/plugins/model_monitor", # Placeholder URL
+    "url": "https://example.com/plugins/network_monitor", # Placeholder URL
     "compatibility": "1.0.0", # Matches IrintAI Version
-    "tags": ["model", "performance", "monitoring", "resource"]
+    "tags": ["network", "monitoring", "performance"]
 }
 
 class IrintaiPlugin:
-    """Wrapper class for the Model Training Performance Plugin"""
+    """Wrapper class for the Network Monitoring Plugin"""
     METADATA = METADATA
 
     def __init__(self, core_system, config_path=None, logger=None, **kwargs):

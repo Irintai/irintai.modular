@@ -3,15 +3,27 @@ torch>=1.9.0
 sentence-transformers>=2.2.2
 requests>=2.25.1
 psutil>=5.8.0
+importlib>=1.0.4  # For dynamic module loading
+typing_extensions>=4.0.0  # For advanced type hints
 
 # UI dependencies
 pillow>=9.0.0
+tkinter>=8.6  # Usually included with Python
 
 # File handling
 python-docx>=0.8.11
 PyPDF2>=2.0.0
 chardet>=4.0.0
+pathlib>=1.0.1  # For path manipulation
 
 # Utilities
 tqdm>=4.61.0
 numpy>=1.20.0
+re>=2.2.1  # For regex pattern matching in diagnostics
+json>=2.0.9  # For config file parsing
+platform>=1.0.8  # For system information gathering
+traceback>=2.0.0  # For detailed error reporting
+logging>=0.5.1.2  # For advanced logging features
+
+# Diagnostic tools
+pytest>=7.0.0  # For running tests in diagnostic mode

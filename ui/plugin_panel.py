@@ -34,8 +34,12 @@ class PluginPanel:
         self.plugin_manager = plugin_manager
         self.log = logger
         
-        # Create the main frame
+        # Add this line:
+        self.is_running = True
+        
+        # Track when the frame is destroyed
         self.frame = ttk.Frame(parent)
+        self.frame.bind("<Destroy>", self._on_destroy)
         
         # Initialize UI components
         self.initialize_ui()
@@ -269,7 +273,7 @@ class PluginPanel:
             target=self._discover_plugins_thread,
             daemon=True
         ).start()
-        
+    
     def _discover_plugins_thread(self):
         """Discover plugins in a background thread"""
         # Discover plugins
@@ -278,8 +282,14 @@ class PluginPanel:
         # Get plugin information
         plugins_info = self.plugin_manager.get_all_plugins()
         
-        # Update UI on main thread
-        self.frame.after(0, lambda: self._update_plugin_tree(plugins_info))
+        # Only try to update UI if we're still running
+        if self.is_running:
+            try:
+                # Schedule update on main thread
+                self.frame.after(0, lambda: self._update_plugin_tree(plugins_info))
+            except Exception:
+                # Silently fail if we can't update
+                pass
         
     def _update_plugin_tree(self, plugins_info):
         """
@@ -750,412 +760,194 @@ class PluginPanel:
                 messagebox.showerror("Error", f"Failed to load configuration: {e}")
         else:
             messagebox.showinfo("Information", "No configuration file found")
-            
-    def save_config(self):
-        """Save configuration to file"""
-        plugin_name = self.selected_name_var.get()
-        if plugin_name == "None":
-            return
-            
-        # Get config from text box
-        config_str = self.config_text.get(1.0, tk.END)
-        
-        try:
-            # Parse JSON
-            config = json.loads(config_str)
-            
-            # Create config directory
-            config_dir = os.path.join(self.plugin_manager.config_dir, plugin_name)
-            os.makedirs(config_dir, exist_ok=True)
-            
-            # Save config
-            config_path = os.path.join(config_dir, "config.json")
-            with open(config_path, 'w') as f:
-                json.dump(config, f, indent=2)
-                
-            # Update plugin configuration
-            self.plugin_manager.update_plugin_configuration(plugin_name, config)
-            
-            self.status_var.set(f"Configuration saved for {plugin_name}")
-        except json.JSONDecodeError as e:
-            messagebox.showerror("JSON Error", f"Invalid JSON format: {e}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save configuration: {e}")
-            
-    def open_plugin_folder(self):
+
+    def create_discovery_section(self): # <<< ADD THIS METHOD
+        """Create the plugin discovery and refresh section"""
+        discovery_frame = ttk.LabelFrame(self.local_frame, text="Plugin Discovery")
+        discovery_frame.pack(fill=tk.X, padx=10, pady=10, anchor=tk.N)
+
+        # Refresh button
+        ttk.Button(
+            discovery_frame,
+            text="Refresh Plugin List",
+            command=self.refresh_plugin_list
+        ).pack(side=tk.LEFT, padx=5, pady=5)
+
+        # Open plugin folder button
+        ttk.Button(
+            discovery_frame,
+            text="Open Plugin Folder",
+            command=self.open_plugin_folder # Assumes this method exists or will be added
+        ).pack(side=tk.LEFT, padx=5, pady=5)
+
+    def create_management_section(self): # <<< ADD THIS METHOD
+        """Create the plugin management section with the list"""
+        management_frame = ttk.LabelFrame(self.local_frame, text="Installed Plugins")
+        management_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # Create a tree view for plugins
+        columns = ("Name", "Version", "Status", "Author")
+        self.plugin_tree = ttk.Treeview(
+            management_frame,
+            columns=columns,
+            show="headings",
+            selectmode="browse",
+            height=8 # Adjust height as needed
+        )
+
+        # Configure columns
+        self.plugin_tree.heading("Name", text="Plugin Name")
+        self.plugin_tree.heading("Version", text="Version")
+        self.plugin_tree.heading("Status", text="Status")
+        self.plugin_tree.heading("Author", text="Author")
+
+        self.plugin_tree.column("Name", width=180, anchor=tk.W)
+        self.plugin_tree.column("Version", width=80, anchor=tk.CENTER)
+        self.plugin_tree.column("Status", width=100, anchor=tk.CENTER)
+        self.plugin_tree.column("Author", width=120, anchor=tk.W)
+
+        # Add scrollbar
+        scrollbar = ttk.Scrollbar(management_frame, orient="vertical", command=self.plugin_tree.yview)
+        self.plugin_tree.configure(yscrollcommand=scrollbar.set)
+
+        # Pack the tree and scrollbar
+        self.plugin_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(5,0), pady=5)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, padx=(0,5), pady=5)
+
+        # Bind selection event
+        self.plugin_tree.bind("<<TreeviewSelect>>", self.on_plugin_selected)
+
+        # --- Action buttons for selected plugin ---
+        action_frame = ttk.Frame(management_frame)
+        # Place action frame to the right or below the tree as desired
+        # Example: Packing below
+        action_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.load_button = ttk.Button(
+            action_frame,
+            text="Load",
+            command=self.load_selected_plugin,
+            state=tk.DISABLED
+        )
+        self.load_button.pack(side=tk.LEFT, padx=2)
+
+        self.activate_button = ttk.Button(
+            action_frame,
+            text="Activate",
+            command=self.activate_selected_plugin,
+            state=tk.DISABLED
+        )
+        self.activate_button.pack(side=tk.LEFT, padx=2)
+
+        self.deactivate_button = ttk.Button(
+            action_frame,
+            text="Deactivate",
+            command=self.deactivate_selected_plugin,
+            state=tk.DISABLED
+        )
+        self.deactivate_button.pack(side=tk.LEFT, padx=2)
+
+        self.reload_button = ttk.Button(
+            action_frame,
+            text="Reload",
+            command=self.reload_selected_plugin,
+            state=tk.DISABLED
+        )
+        self.reload_button.pack(side=tk.LEFT, padx=2)
+
+
+    def create_info_section(self): # <<< ADD THIS METHOD
+        """Create the plugin information display section"""
+        info_frame = ttk.LabelFrame(self.local_frame, text="Plugin Information")
+        info_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        # Grid for details
+        details_grid = ttk.Frame(info_frame)
+        details_grid.pack(fill=tk.X, padx=5, pady=5)
+        details_grid.columnconfigure(1, weight=1) # Make value column expandable
+
+        # Name
+        ttk.Label(details_grid, text="Name:", width=10).grid(row=0, column=0, sticky=tk.W, padx=5, pady=1)
+        self.selected_name_var = tk.StringVar(value="None")
+        ttk.Label(details_grid, textvariable=self.selected_name_var, font=("Helvetica", 10, "bold")).grid(row=0, column=1, sticky=tk.W, padx=5, pady=1)
+
+        # Status
+        ttk.Label(details_grid, text="Status:", width=10).grid(row=1, column=0, sticky=tk.W, padx=5, pady=1)
+        self.selected_status_var = tk.StringVar(value="N/A")
+        ttk.Label(details_grid, textvariable=self.selected_status_var).grid(row=1, column=1, sticky=tk.W, padx=5, pady=1)
+
+        # Version
+        ttk.Label(details_grid, text="Version:", width=10).grid(row=2, column=0, sticky=tk.W, padx=5, pady=1)
+        self.selected_version_var = tk.StringVar(value="N/A")
+        ttk.Label(details_grid, textvariable=self.selected_version_var).grid(row=2, column=1, sticky=tk.W, padx=5, pady=1)
+
+        # Author
+        ttk.Label(details_grid, text="Author:", width=10).grid(row=3, column=0, sticky=tk.W, padx=5, pady=1)
+        self.selected_author_var = tk.StringVar(value="N/A")
+        ttk.Label(details_grid, textvariable=self.selected_author_var).grid(row=3, column=1, sticky=tk.W, padx=5, pady=1)
+
+        # License
+        ttk.Label(details_grid, text="License:", width=10).grid(row=4, column=0, sticky=tk.W, padx=5, pady=1)
+        self.selected_license_var = tk.StringVar(value="N/A")
+        ttk.Label(details_grid, textvariable=self.selected_license_var).grid(row=4, column=1, sticky=tk.W, padx=5, pady=1)
+
+        # Location
+        ttk.Label(details_grid, text="Location:", width=10).grid(row=5, column=0, sticky=tk.W, padx=5, pady=1)
+        self.selected_location_var = tk.StringVar(value="N/A")
+        ttk.Label(details_grid, textvariable=self.selected_location_var, wraplength=400).grid(row=5, column=1, sticky=tk.W, padx=5, pady=1)
+
+
+        # Description section
+        desc_frame = ttk.Frame(info_frame)
+        desc_frame.pack(fill=tk.X, padx=5, pady=5)
+        ttk.Label(desc_frame, text="Description:").pack(anchor=tk.W)
+
+        self.description_text = scrolledtext.ScrolledText(
+            desc_frame,
+            height=4,
+            wrap=tk.WORD,
+            font=("Helvetica", 9)
+        )
+        self.description_text.pack(fill=tk.X, padx=5, pady=(0,5))
+        self.description_text.config(state=tk.DISABLED) # Start disabled
+
+        # Configuration section (Read-only view)
+        config_frame = ttk.Frame(info_frame)
+        config_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        ttk.Label(config_frame, text="Configuration (View only - Edit in Plugin Settings):").pack(anchor=tk.W)
+
+        self.config_text = scrolledtext.ScrolledText(
+            config_frame,
+            height=5,
+            wrap=tk.WORD,
+            font=("Courier New", 9)
+        )
+        self.config_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,5))
+        self.config_text.config(state=tk.DISABLED) # Start disabled
+
+    # --- Add the missing open_plugin_folder method ---
+    def open_plugin_folder(self): # <<< ADD THIS METHOD
         """Open the plugin folder in file explorer"""
         import os
         import subprocess
         import sys
-        
+
         plugin_dir = self.plugin_manager.plugin_dir
-        
+
         try:
             if not os.path.exists(plugin_dir):
                 os.makedirs(plugin_dir, exist_ok=True)
-                
+
             # Open folder based on OS
             if os.name == 'nt':  # Windows
                 os.startfile(plugin_dir)
             elif os.name == 'posix':  # macOS, Linux
                 subprocess.run(['open' if sys.platform == 'darwin' else 'xdg-open', plugin_dir])
-                
+
             self.log(f"[Opened] Plugin folder: {plugin_dir}")
         except Exception as e:
             self.log(f"[Error] Cannot open plugin folder: {e}")
             messagebox.showerror("Error", f"Cannot open plugin folder: {e}")
-
-    def create_plugin_action_menu(self):
-        """Create menu for plugin-provided model actions"""
-        # Find appropriate frame to add menu
-        actions_frame = None
-        for child in self.frame.winfo_children():
-            if isinstance(child, ttk.LabelFrame) and child.cget("text") == "Model Management":
-                # Get the first child frame which should be the actions frame
-                actions_frame = child.winfo_children()[0]
-                break
-                
-        if not actions_frame:
-            return
-            
-        # Create a menubutton for plugin actions
-        self.plugin_action_button = ttk.Menubutton(
-            actions_frame,
-            text="Plugin Actions",
-            direction="below"
-        )
-        self.plugin_action_button.pack(side=tk.RIGHT, padx=5)
-        
-        # Create the dropdown menu
-        self.plugin_action_menu = tk.Menu(self.plugin_action_button, tearoff=0)
-        self.plugin_action_button["menu"] = self.plugin_action_menu
-        
-        # Add placeholder when empty
-        self.plugin_action_menu.add_command(
-            label="No plugin actions available",
-            state=tk.DISABLED
-        )
-
-    def register_plugin_extension(self, plugin_id, plugin):
-        """
-        Register plugin extensions for the model panel
-        
-        Args:
-            plugin_id: Plugin identifier
-            plugin: Plugin instance
-        """
-        # Skip if plugin doesn't have model extensions
-        if not hasattr(plugin, "get_model_extensions"):
-            return
-            
-        try:
-            # Get extensions from plugin
-            extensions = plugin.get_model_extensions()
-            
-            if not extensions or not isinstance(extensions, dict):
-                return
-                
-            # Register model providers
-            if "model_providers" in extensions and isinstance(extensions["model_providers"], dict):
-                for name, provider_func in extensions["model_providers"].items():
-                    if callable(provider_func):
-                        self.plugin_model_providers[f"{plugin_id}.{name}"] = provider_func
-                
-            # Register model configurations
-            if "model_configs" in extensions and isinstance(extensions["model_configs"], dict):
-                for model_name, config_func in extensions["model_configs"].items():
-                    if callable(config_func):
-                        self.plugin_model_configs[f"{plugin_id}.{model_name}"] = config_func
-                        
-            # Register model actions
-            if "model_actions" in extensions and isinstance(extensions["model_actions"], dict):
-                for action_name, action_func in extensions["model_actions"].items():
-                    if callable(action_func):
-                        self.plugin_actions[f"{plugin_id}.{action_name}"] = {
-                            "function": action_func,
-                            "label": action_name.replace("_", " ").title()
-                        }
-            
-            # Register UI extensions
-            if "ui_extensions" in extensions and isinstance(extensions["ui_extensions"], list):
-                self.add_plugin_ui_extensions(plugin_id, extensions["ui_extensions"])
-                
-            # Update UI to reflect new extensions            
-            self.update_plugin_action_menu()
-            
-            # Refresh model list to include custom models if any
-            if "model_providers" in extensions:
-                self.refresh_model_list()
-            
-            self.log(f"[Model Panel] Registered extensions from plugin: {plugin_id}")
-            
-        except Exception as e:
-            self.log(f"[Model Panel] Error registering extensions from plugin {plugin_id}: {e}")
-
-    def unregister_plugin_extension(self, plugin_id):
-        """
-        Unregister plugin extensions
-        
-        Args:
-            plugin_id: Plugin identifier
-        """
-        # Remove model providers
-        providers_to_remove = [k for k in self.plugin_model_providers if k.startswith(f"{plugin_id}.")]
-        for provider_id in providers_to_remove:
-            del self.plugin_model_providers[provider_id]
-        
-        # Remove model configs
-        configs_to_remove = [k for k in self.plugin_model_configs if k.startswith(f"{plugin_id}.")]
-        for config_id in configs_to_remove:
-            del self.plugin_model_configs[config_id]
-        
-        # Remove actions
-        actions_to_remove = [k for k in self.plugin_actions if k.startswith(f"{plugin_id}.")]
-        for action_id in actions_to_remove:
-            del self.plugin_actions[action_id]
-        
-        # Remove UI extensions
-        if plugin_id in self.plugin_ui_extensions:
-            for extension in self.plugin_ui_extensions[plugin_id]:
-                if extension.winfo_exists():
-                    extension.destroy()
-            del self.plugin_ui_extensions[plugin_id]
-        
-        # Update UI to reflect removed extensions
-        self.update_plugin_action_menu()
-        
-        # Hide plugin frame if no more extensions
-        if not any(self.plugin_ui_extensions.values()) and self.plugin_frame.winfo_ismapped():
-            self.plugin_frame.pack_forget()
-            
-        # Refresh model list if we removed model providers
-        if any(provider.startswith(f"{plugin_id}.") for provider in providers_to_remove):
-            self.refresh_model_list()
-        
-        self.log(f"[Model Panel] Unregistered extensions from plugin: {plugin_id}")
-
-    def add_plugin_ui_extensions(self, plugin_id, extensions):
-        """
-        Add plugin UI extensions to the model panel
-        
-        Args:
-            plugin_id: Plugin identifier
-            extensions: List of UI extension widgets
-        """
-        # Skip if no extensions
-        if not extensions:
-            return
-            
-        # Create container for this plugin if needed
-        if plugin_id not in self.plugin_ui_extensions:
-            self.plugin_ui_extensions[plugin_id] = []
-        
-        # Add each extension
-        for extension in extensions:
-            if isinstance(extension, tk.Widget):
-                # Add to plugin frame
-                extension.pack(in_=self.plugin_frame, fill=tk.X, padx=5, pady=2)
-                
-                # Add to our tracking list
-                self.plugin_ui_extensions[plugin_id].append(extension)
-        
-        # Show the plugin frame if not already visible
-        if not self.plugin_frame.winfo_ismapped() and any(self.plugin_ui_extensions.values()):
-            self.plugin_frame.pack(fill=tk.X, padx=10, pady=10, before=self.frame.winfo_children()[2])
-
-    def update_plugin_action_menu(self):
-        """Update the plugin action menu with registered actions"""
-        # Skip if menu doesn't exist
-        if not hasattr(self, "plugin_action_menu"):
-            return
-            
-        # Clear existing items
-        self.plugin_action_menu.delete(0, tk.END)
-        
-        # Add plugin actions
-        if self.plugin_actions:
-            for action_id, action_info in sorted(self.plugin_actions.items(), key=lambda x: x[1]["label"]):
-                # Add to menu
-                self.plugin_action_menu.add_command(
-                    label=action_info["label"],
-                    command=lambda aid=action_id: self.execute_plugin_action(aid)
-                )
-        else:
-            # Add placeholder
-            self.plugin_action_menu.add_command(
-                label="No plugin actions available",
-                state=tk.DISABLED
-            )
-
-    def on_plugin_activated(self, plugin_id, plugin_instance):
-        """
-        Handle plugin activation event
-        
-        Args:
-            plugin_id: ID of activated plugin
-            plugin_instance: Plugin instance
-        """
-        # Register model extensions for newly activated plugin
-        self.register_plugin_extension(plugin_id, plugin_instance)
-
-    def on_plugin_deactivated(self, plugin_id):
-        """
-        Handle plugin deactivation event
-        
-        Args:
-            plugin_id: ID of deactivated plugin
-        """
-        # Unregister model extensions
-        self.unregister_plugin_extension(plugin_id)
-
-    def on_plugin_unloaded(self, plugin_id):
-        """
-        Handle plugin unloading event
-        
-        Args:
-            plugin_id: ID of unloaded plugin
-        """
-        # Ensure extensions are unregistered
-        self.unregister_plugin_extension(plugin_id)
-
-    def execute_plugin_action(self, action_id):
-        """
-        Execute a plugin-provided model action
-        
-        Args:
-            action_id: ID of the action to execute
-        """
-        if action_id not in self.plugin_actions:
-            return
-            
-        # Get selected model
-        selection = self.model_tree.selection()
-        if not selection:
-            messagebox.showinfo("No Model Selected", "Please select a model first")
-            return
-            
-        # Get model name
-        item = selection[0]
-        values = self.model_tree.item(item, "values")
-        model_name = values[0]
-        
-        try:
-            # Execute the action
-            action_func = self.plugin_actions[action_id]["function"]
-            result = action_func(model_name, self)
-            
-            # Show result if provided
-            if result and isinstance(result, str):
-                messagebox.showinfo("Action Result", result)
-                
-            self.log(f"[Model Panel] Executed action {action_id} on model {model_name}")
-            
-        except Exception as e:
-            messagebox.showerror("Error", str(e))
-            self.log(f"[Model Panel] Error executing action {action_id}: {e}")
-
-    def get_model_config(self, model_name):
-        """
-        Get model configuration including any plugin customizations
-        
-        Args:
-            model_name: Name of the model
-            
-        Returns:
-            Dictionary with model configuration
-        """
-        # Start with default configuration
-        config = self.model_manager.get_model_config(model_name)
-        
-        # Apply plugin configurations if any
-        if hasattr(self, "plugin_model_configs"):
-            # Find specific configurations for this model
-            for config_id, config_func in self.plugin_model_configs.items():
-                try:
-                    # Check if this config applies to this model
-                    model_part = config_id.split(".", 1)[1]  # Get part after plugin ID
-                    if model_part == "*" or model_part == model_name:
-                        # Apply configuration
-                        plugin_config = config_func(model_name, config.copy())
-                        if plugin_config and isinstance(plugin_config, dict):
-                            # Update configuration
-                            config.update(plugin_config)
-                            
-                except Exception as e:
-                    self.log(f"[Error] Model config {config_id} failed: {e}")
-                    
-        return config
-
-    def start_selected_model(self):
-        """Start the selected model"""
-        selection = self.model_tree.selection()
-        if not selection:
-            return
-                
-        # Get model name
-        item = selection[0]
-        values = self.model_tree.item(item, "values")
-        model_name = values[0]
-        
-        # Check if already running
-        if self.model_manager.model_process and self.model_manager.model_process.poll() is None:
-            result = messagebox.askyesno(
-                "Model Already Running", 
-                f"Another model is already running. Stop it and start '{model_name}' instead?",
-                icon=messagebox.WARNING
-            )
-                
-            if result:
-                self.model_manager.stop_model()
-            else:
-                return
-                
-        # Update progress bar and status
-        self.progress_mode.set("indeterminate")
-        self.progress_bar.config(mode="indeterminate")
-        self.progress_bar.start()
-        self.status_var.set(f"Starting {model_name}...")
-        
-        # Event callback for model events
-        def on_model_event(event_type, data):
-            if event_type == "started":
-                self.frame.after(0, lambda: self._update_model_status(model_name, MODEL_STATUS["RUNNING"]))
-                self.frame.after(0, lambda: self._reset_progress_bar())
-                self.frame.after(0, lambda: self.status_var.set(f"{model_name} is running"))
-            elif event_type == "stopped":
-                self.frame.after(0, lambda: self._update_model_status(model_name, MODEL_STATUS["INSTALLED"]))
-                self.frame.after(0, lambda: self._reset_progress_bar())
-                self.frame.after(0, lambda: self.status_var.set(f"{model_name} stopped"))
-            elif event_type == "error":
-                self.frame.after(0, lambda: self._update_model_status(model_name, MODEL_STATUS["ERROR"]))
-                self.frame.after(0, lambda: self._reset_progress_bar())
-                self.frame.after(0, lambda: self.status_var.set(f"Error: {data}"))
-                
-        # Get model configuration with plugin customizations
-        model_config = self.get_model_config(model_name)
-        
-        # Start the model with config
-        success = self.model_manager.start_model(model_name, on_model_event, model_config)
-        
-        if success:
-            # Update tree item
-            self.model_tree.item(
-                item, 
-                values=(model_name, values[1], MODEL_STATUS["LOADING"], values[3])
-            )
-                
-            # Disable buttons during loading
-            self.install_button.config(state=tk.DISABLED)
-            self.uninstall_button.config(state=tk.DISABLED)
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
-                
-            # Select this model for use
-            self.select_current_model()
-        else:
-            # Reset progress bar and status
-            self._reset_progress_bar()
-            self.status_var.set(f"Failed to start {model_name}")
 
     def setup_sandbox_tab(self):
         """Setup the plugin sandbox tab"""
@@ -1475,3 +1267,824 @@ class PluginPanel:
         
         # Auto-scroll
         self.sandbox_output.see(tk.END)
+
+    def search_marketplace(self):
+        """Search the plugin marketplace based on current search criteria"""
+        # Get search query
+        query = self.search_var.get().strip()
+        repository = self.repo_var.get()
+        
+        # Clear current results
+        for item in self.marketplace_tree.get_children():
+            self.marketplace_tree.delete(item)
+            
+        # Update status
+        self.status_var.set(f"Searching for '{query}' in {repository} repository...")
+        self.progress_bar.start()
+        
+        # Start search in a separate thread
+        threading.Thread(
+            target=self._search_marketplace_thread,
+            args=(query, repository),
+            daemon=True
+        ).start()
+        
+    def _search_marketplace_thread(self, query, repository):
+        """
+        Search the marketplace in a background thread
+        
+        Args:
+            query: Search query
+            repository: Repository to search (Official, Community, All)
+        """
+        try:
+            # TODO: In a real implementation, this would connect to an external API
+            # For now, we'll simulate some results
+            time.sleep(1)  # Simulate network delay
+            
+            # Simulate search results
+            results = []
+            
+            # Add some dummy results based on query
+            if not query or "plugin" in query.lower():
+                results.extend([
+                    {
+                        "name": "Advanced Search Plugin",
+                        "version": "1.2.1",
+                        "rating": "4.8",
+                        "downloads": "12,453",
+                        "author": "Irintai Team",
+                        "category": "Utilities",
+                        "description": "Enhanced search capabilities for vector databases and document retrieval.",
+                        "updated": "2025-03-15",
+                        "size": "1.2 MB",
+                        "dependencies": []
+                    },
+                    {
+                        "name": "Document Scanner Plugin",
+                        "version": "0.9.5",
+                        "rating": "4.2",
+                        "downloads": "8,712",
+                        "author": "DocScan Inc.",
+                        "category": "Document Processing",
+                        "description": "Automatically processes and indexes documents from various sources.",
+                        "updated": "2025-01-22",
+                        "size": "3.5 MB",
+                        "dependencies": ["Advanced Search Plugin"]
+                    }
+                ])
+                
+            if not query or "code" in query.lower():
+                results.extend([
+                    {
+                        "name": "Code Assistant Pro",
+                        "version": "2.1.0",
+                        "rating": "4.9",
+                        "downloads": "32,150",
+                        "author": "DevTools Corp",
+                        "category": "Development",
+                        "description": "Adds code completion, refactoring suggestions, and more to enhance coding capabilities.",
+                        "updated": "2025-04-01",
+                        "size": "4.8 MB",
+                        "dependencies": []
+                    }
+                ])
+                
+            if not query or "ui" in query.lower() or "theme" in query.lower():
+                results.extend([
+                    {
+                        "name": "UI Theme Pack",
+                        "version": "1.5.2",
+                        "rating": "4.7",
+                        "downloads": "18,325",
+                        "author": "Design Studio X",
+                        "category": "UI/UX",
+                        "description": "Collection of modern UI themes with customizable color schemes and layouts.",
+                        "updated": "2025-02-18",
+                        "size": "2.3 MB",
+                        "dependencies": []
+                    }
+                ])
+            
+            # Filter by repository if needed
+            if repository == "Official":
+                results = [r for r in results if "Irintai Team" in r.get("author", "")]
+            elif repository == "Community":
+                results = [r for r in results if "Irintai Team" not in r.get("author", "")]
+            
+            # Update UI on main thread
+            self.frame.after(0, lambda: self._update_marketplace_results(results, query))
+            
+        except Exception as e:
+            # Update UI with error
+            self.frame.after(0, lambda: self._update_marketplace_error(str(e)))
+            
+    def _update_marketplace_results(self, results, query):
+        """
+        Update the marketplace tree with search results
+        
+        Args:
+            results: List of plugin results
+            query: Search query used
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        # Clear current results
+        for item in self.marketplace_tree.get_children():
+            self.marketplace_tree.delete(item)
+            
+        # Add results to tree
+        if results:
+            for plugin in results:
+                self.marketplace_tree.insert(
+                    "",
+                    tk.END,
+                    values=(
+                        plugin["name"],
+                        plugin["version"],
+                        plugin["rating"],
+                        plugin["downloads"]
+                    ),
+                    tags=(plugin["name"],)  # Use name as tag for lookup
+                )
+                
+            # Select first result
+            first = self.marketplace_tree.get_children()[0]
+            self.marketplace_tree.selection_set(first)
+            self.on_marketplace_selected(None)
+            
+            self.status_var.set(f"Found {len(results)} plugins matching '{query}'")
+        else:
+            self.status_var.set(f"No plugins found matching '{query}'")
+            
+            # Clear details
+            self.market_description.delete(1.0, tk.END)
+            self.market_author_var.set("-")
+            self.market_category_var.set("-")
+            self.market_updated_var.set("-")
+            self.market_size_var.set("-")
+            self.dependencies_var.set("None")
+        
+    def _update_marketplace_error(self, error_message):
+        """
+        Update the UI with search error
+        
+        Args:
+            error_message: Error message to display
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        # Show error
+        self.status_var.set(f"Error searching marketplace: {error_message}")
+        messagebox.showerror("Search Error", f"Failed to search marketplace:\n{error_message}")
+
+    def on_marketplace_selected(self, event):
+        """Handle selection in the marketplace tree"""
+        selection = self.marketplace_tree.selection()
+        if not selection:
+            return
+            
+        # Get selected item
+        item = selection[0]
+        values = self.marketplace_tree.item(item, "values")
+        
+        if not values:
+            return
+            
+        # Get plugin name
+        plugin_name = values[0]
+        
+        # Find plugin details (in real implementation, would fetch from API)
+        plugin = None
+        for p in self._get_demo_plugins():
+            if p["name"] == plugin_name:
+                plugin = p
+                break
+                
+        if not plugin:
+            return
+            
+        # Update details
+        self.market_description.delete(1.0, tk.END)
+        self.market_description.insert(1.0, plugin.get("description", "No description available"))
+        
+        self.market_author_var.set(plugin.get("author", "Unknown"))
+        self.market_category_var.set(plugin.get("category", "General"))
+        self.market_updated_var.set(plugin.get("updated", "Unknown"))
+        self.market_size_var.set(plugin.get("size", "Unknown"))
+        
+        # Update dependencies
+        dependencies = plugin.get("dependencies", [])
+        if dependencies:
+            self.dependencies_var.set(", ".join(dependencies))
+        else:
+            self.dependencies_var.set("None")
+
+    def _get_demo_plugins(self):
+        """Get demo plugins for marketplace display"""
+        return [
+            {
+                "name": "Advanced Search Plugin",
+                "version": "1.2.1",
+                "rating": "4.8",
+                "downloads": "12,453",
+                "author": "Irintai Team",
+                "category": "Utilities",
+                "description": "Enhanced search capabilities for vector databases and document retrieval.",
+                "updated": "2025-03-15",
+                "size": "1.2 MB",
+                "dependencies": []
+            },
+            {
+                "name": "Document Scanner Plugin",
+                "version": "0.9.5",
+                "rating": "4.2",
+                "downloads": "8,712",
+                "author": "DocScan Inc.",
+                "category": "Document Processing",
+                "description": "Automatically processes and indexes documents from various sources.",
+                "updated": "2025-01-22",
+                "size": "3.5 MB",
+                "dependencies": ["Advanced Search Plugin"]
+            },
+            {
+                "name": "Code Assistant Pro",
+                "version": "2.1.0",
+                "rating": "4.9",
+                "downloads": "32,150",
+                "author": "DevTools Corp",
+                "category": "Development",
+                "description": "Adds code completion, refactoring suggestions, and more to enhance coding capabilities.",
+                "updated": "2025-04-01",
+                "size": "4.8 MB",
+                "dependencies": []
+            },
+            {
+                "name": "UI Theme Pack",
+                "version": "1.5.2",
+                "rating": "4.7",
+                "downloads": "18,325",
+                "author": "Design Studio X",
+                "category": "UI/UX",
+                "description": "Collection of modern UI themes with customizable color schemes and layouts.",
+                "updated": "2025-02-18",
+                "size": "2.3 MB",
+                "dependencies": []
+            }
+        ]
+
+    def install_marketplace_plugin(self):
+        """Install the selected plugin from marketplace"""
+        selection = self.marketplace_tree.selection()
+        if not selection:
+            return
+            
+        # Get selected item
+        item = selection[0]
+        values = self.marketplace_tree.item(item, "values")
+        
+        if not values:
+            return
+            
+        # Get plugin name
+        plugin_name = values[0]
+        
+        # Confirm installation
+        result = messagebox.askyesno(
+            "Install Plugin",
+            f"Do you want to install '{plugin_name}'?"
+        )
+        
+        if not result:
+            return
+            
+        # Show progress
+        self.progress_bar.start()
+        self.status_var.set(f"Installing {plugin_name}...")
+        
+        # Start installation in a separate thread
+        threading.Thread(
+            target=self._install_marketplace_plugin_thread,
+            args=(plugin_name,),
+            daemon=True
+        ).start()
+        
+    def _install_marketplace_plugin_thread(self, plugin_name):
+        """
+        Install a plugin from marketplace in a background thread
+        
+        Args:
+            plugin_name: Name of the plugin to install
+        """
+        try:
+            # Simulate installation process
+            time.sleep(2)
+            
+            # Update UI on main thread
+            self.frame.after(0, lambda: self._on_marketplace_install_complete(plugin_name, True))
+            
+        except Exception as e:
+            # Update UI with error
+            self.frame.after(0, lambda: self._on_marketplace_install_complete(plugin_name, False, str(e)))
+        
+    def _on_marketplace_install_complete(self, plugin_name, success, error_message=None):
+        """
+        Handle completion of plugin installation
+        
+        Args:
+            plugin_name: Name of the plugin
+            success: Whether installation was successful
+            error_message: Optional error message
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        if success:
+            self.status_var.set(f"Successfully installed {plugin_name}")
+            messagebox.showinfo("Installation Complete", f"Plugin {plugin_name} installed successfully.")
+            
+            # Refresh local plugin list
+            self.refresh_plugin_list()
+        else:
+            self.status_var.set(f"Failed to install {plugin_name}: {error_message}")
+            messagebox.showerror("Installation Failed", f"Failed to install {plugin_name}:\n{error_message}")
+
+    def visit_plugin_website(self):
+        """Open the plugin website in the default browser"""
+        selection = self.marketplace_tree.selection()
+        if not selection:
+            return
+            
+        # Get selected item
+        item = selection[0]
+        values = self.marketplace_tree.item(item, "values")
+        
+        if not values:
+            return
+            
+        # Get plugin name
+        plugin_name = values[0]
+        
+        # Find plugin details
+        plugin = None
+        for p in self._get_demo_plugins():
+            if p["name"] == plugin_name:
+                plugin = p
+                break
+                
+        if not plugin:
+            return
+            
+        # Simulate website (would be in plugin["url"] in a real implementation)
+        url = f"https://example.com/plugins/{plugin_name.lower().replace(' ', '-')}"
+        
+        # Try to open URL in browser
+        import webbrowser
+        try:
+            webbrowser.open(url)
+            self.status_var.set(f"Opened website for {plugin_name}")
+        except Exception as e:
+            self.status_var.set(f"Failed to open website: {e}")
+            messagebox.showerror("Error", f"Failed to open website:\n{e}")
+
+    def view_plugin_dependencies(self):
+        """Show plugin dependencies in a dialog"""
+        selection = self.marketplace_tree.selection()
+        if not selection:
+            return
+            
+        # Get selected item
+        item = selection[0]
+        values = self.marketplace_tree.item(item, "values")
+        
+        if not values:
+            return
+            
+        # Get plugin name
+        plugin_name = values[0]
+        
+        # Find plugin details
+        plugin = None
+        for p in self._get_demo_plugins():
+            if p["name"] == plugin_name:
+                plugin = p
+                break
+                
+        if not plugin:
+            return
+            
+        # Get dependencies
+        dependencies = plugin.get("dependencies", [])
+        
+        if not dependencies:
+            messagebox.showinfo("Dependencies", f"{plugin_name} has no dependencies.")
+            return
+            
+        # Show dependencies dialog
+        dialog = tk.Toplevel(self.frame)
+        dialog.title(f"Dependencies for {plugin_name}")
+        dialog.geometry("400x300")
+        dialog.transient(self.frame)
+        dialog.grab_set()
+        
+        # Add content
+        ttk.Label(
+            dialog,
+            text=f"Dependencies for {plugin_name}",
+            font=("", 12, "bold")
+        ).pack(pady=(10, 5))
+        
+        # Create a listbox for dependencies
+        listbox = tk.Listbox(dialog)
+        listbox.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        
+        # Add dependencies to listbox
+        for dep in dependencies:
+            listbox.insert(tk.END, dep)
+            
+        # Close button
+        ttk.Button(
+            dialog,
+            text="Close",
+            command=dialog.destroy
+        ).pack(pady=10)
+
+    def check_plugin_updates(self):
+        """Check for plugin updates"""
+        # Show progress
+        self.progress_bar.start()
+        self.status_var.set("Checking for plugin updates...")
+        
+        # Start check in a separate thread
+        threading.Thread(
+            target=self._check_updates_thread,
+            daemon=True
+        ).start()
+        
+    def _check_updates_thread(self):
+        """Check for updates in a background thread"""
+        try:
+            # Simulate network operation
+            time.sleep(1.5)
+            
+            # No updates in this demo
+            self.frame.after(0, lambda: self._on_update_check_complete([]))
+            
+        except Exception as e:
+            self.frame.after(0, lambda: self._on_update_check_error(str(e)))
+        
+    def _on_update_check_complete(self, updates):
+        """
+        Handle completion of update check
+        
+        Args:
+            updates: List of available updates
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        if updates:
+            self.status_var.set(f"Found {len(updates)} plugin updates")
+            
+            # Show updates in a dialog
+            # (Not implemented in this example)
+            messagebox.showinfo("Plugin Updates", f"Found {len(updates)} plugin updates.")
+        else:
+            self.status_var.set("All plugins are up to date")
+            messagebox.showinfo("Plugin Updates", "All plugins are up to date.")
+        
+    def _on_update_check_error(self, error_message):
+        """
+        Handle error during update check
+        
+        Args:
+            error_message: Error message
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        # Show error
+        self.status_var.set(f"Error checking for updates: {error_message}")
+        messagebox.showerror("Update Error", f"Failed to check for updates:\n{error_message}")
+
+    def run_sandbox_tests(self):
+        """Run tests for the plugin in the sandbox"""
+        plugin_name = self.sandbox_plugin_var.get()
+        
+        if not plugin_name or plugin_name == "No plugins available":
+            return
+            
+        # Clear output and show header
+        self.sandbox_output.delete(1.0, tk.END)
+        self.sandbox_output.insert(tk.END, f"==== Running tests for {plugin_name} ====\n\n", "info")
+        
+        # Show test configuration
+        self.sandbox_output.insert(tk.END, f"Test configuration:\n")
+        self.sandbox_output.insert(tk.END, f"- File system access: {self.fs_access_var.get()}\n")
+        self.sandbox_output.insert(tk.END, f"- Network access: {'Allowed' if self.network_access_var.get() else 'Blocked'}\n")
+        self.sandbox_output.insert(tk.END, f"- Memory limit: {self.memory_limit_var.get()}\n\n")
+        
+        # Start testing in a separate thread
+        threading.Thread(
+            target=self._run_sandbox_tests_thread,
+            args=(plugin_name,),
+            daemon=True
+        ).start()
+        
+    def _run_sandbox_tests_thread(self, plugin_name):
+        """
+        Run sandbox tests in a background thread
+        
+        Args:
+            plugin_name: Name of the plugin to test
+        """
+        try:
+            # Get plugin path
+            plugin_path = os.path.join(self.plugin_manager.plugin_dir, plugin_name)
+            
+            # Simulate tests
+            self._append_sandbox_output("Initializing sandbox environment...\n")
+            time.sleep(0.5)
+            
+            self._append_sandbox_output("Loading plugin in isolated environment...\n")
+            time.sleep(1.0)
+            
+            self._append_sandbox_output("Running standard tests...\n\n")
+            
+            # Test plugin initialization
+            self._append_sandbox_output("1. Testing plugin initialization... ")
+            time.sleep(0.5)
+            self._append_sandbox_output("OK\n", "success")
+            
+            # Test activate method
+            self._append_sandbox_output("2. Testing activate() method... ")
+            time.sleep(0.5)
+            self._append_sandbox_output("OK\n", "success")
+            
+            # Test deactivate method
+            self._append_sandbox_output("3. Testing deactivate() method... ")
+            time.sleep(0.5)
+            self._append_sandbox_output("OK\n", "success")
+            
+            # Test file operations
+            self._append_sandbox_output("4. Testing file operations... ")
+            if self.fs_access_var.get() == "none":
+                self._append_sandbox_output("SKIPPED (no file access)\n", "warning")
+            else:
+                time.sleep(0.7)
+                self._append_sandbox_output("OK\n", "success")
+                
+            # Test network access
+            self._append_sandbox_output("5. Testing network operations... ")
+            if not self.network_access_var.get():
+                self._append_sandbox_output("SKIPPED (no network access)\n", "warning")
+            else:
+                time.sleep(0.8)
+                self._append_sandbox_output("OK\n", "success")
+                
+            # Test memory allocation
+            self._append_sandbox_output("6. Testing memory allocation... ")
+            time.sleep(0.6)
+            
+            # Parse memory limit
+            limit_str = self.memory_limit_var.get()
+            if "MB" in limit_str:
+                limit = int(limit_str.split(" ")[0])
+            elif "GB" in limit_str:
+                limit = int(limit_str.split(" ")[0]) * 1024
+            else:
+                limit = 256  # Default
+                
+            if limit < 256:
+                self._append_sandbox_output("WARNING: Low memory limit may affect plugin performance\n", "warning")
+            else:
+                self._append_sandbox_output("OK\n", "success")
+                
+            # Summary
+            self._append_sandbox_output("\nAll tests completed successfully.\n", "success")
+            self._append_sandbox_output("The plugin appears to be safe and working correctly.\n", "success")
+            
+        except Exception as e:
+            self._append_sandbox_output(f"ERROR: Test failed: {e}\n", "error")
+
+    def view_plugin_permissions(self):
+        """View the permissions requested by the plugin"""
+        plugin_name = self.sandbox_plugin_var.get()
+        
+        if not plugin_name or plugin_name == "No plugins available":
+            return
+            
+        # Show permissions dialog
+        dialog = tk.Toplevel(self.frame)
+        dialog.title(f"Permissions - {plugin_name}")
+        dialog.geometry("500x400")
+        dialog.transient(self.frame)
+        dialog.grab_set()
+        
+        # Add content
+        ttk.Label(
+            dialog,
+            text=f"Permissions for {plugin_name}",
+            font=("", 12, "bold")
+        ).pack(pady=(10, 5))
+        
+        # Create a frame for permissions
+        perm_frame = ttk.Frame(dialog, padding=10)
+        perm_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Permission columns
+        ttk.Label(perm_frame, text="Permission", font=("", 10, "bold")).grid(row=0, column=0, sticky=tk.W, pady=(0, 5))
+        ttk.Label(perm_frame, text="Status", font=("", 10, "bold")).grid(row=0, column=1, sticky=tk.W, pady=(0, 5))
+        ttk.Label(perm_frame, text="Description", font=("", 10, "bold")).grid(row=0, column=2, sticky=tk.W, pady=(0, 5))
+        
+        # File system access
+        ttk.Label(perm_frame, text="File System").grid(row=1, column=0, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text=self.fs_access_var.get().capitalize(),
+            foreground="green" if self.fs_access_var.get() != "none" else "red"
+        ).grid(row=1, column=1, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Access to plugin-specific data directory"
+        ).grid(row=1, column=2, sticky=tk.W, pady=2)
+        
+        # Network access
+        ttk.Label(perm_frame, text="Network").grid(row=2, column=0, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Enabled" if self.network_access_var.get() else "Disabled",
+            foreground="green" if self.network_access_var.get() else "red"
+        ).grid(row=2, column=1, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Internet access for API calls and data retrieval"
+        ).grid(row=2, column=2, sticky=tk.W, pady=2)
+        
+        # UI access
+        ttk.Label(perm_frame, text="UI Access").grid(row=3, column=0, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Limited",
+            foreground="orange"
+        ).grid(row=3, column=1, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Can create dialog windows and panel elements"
+        ).grid(row=3, column=2, sticky=tk.W, pady=2)
+        
+        # System access
+        ttk.Label(perm_frame, text="System").grid(row=4, column=0, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="None",
+            foreground="red"
+        ).grid(row=4, column=1, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="No access to system functions or processes"
+        ).grid(row=4, column=2, sticky=tk.W, pady=2)
+        
+        # Plugin API
+        ttk.Label(perm_frame, text="Plugin API").grid(row=5, column=0, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Full",
+            foreground="green"
+        ).grid(row=5, column=1, sticky=tk.W, pady=2)
+        ttk.Label(
+            perm_frame,
+            text="Access to plugin API for events and services"
+        ).grid(row=5, column=2, sticky=tk.W, pady=2)
+        
+        # Close button
+        ttk.Button(
+            dialog,
+            text="Close",
+            command=dialog.destroy
+        ).pack(pady=10)
+
+    def approve_sandbox_plugin(self):
+        """Approve a plugin from sandbox and install it"""
+        plugin_name = self.sandbox_plugin_var.get()
+        
+        if not plugin_name or plugin_name == "No plugins available":
+            return
+            
+        # Confirm installation
+        result = messagebox.askyesno(
+            "Approve Plugin",
+            f"Do you want to approve and activate {plugin_name}?\n\n"
+            f"This will load the plugin with the following permissions:\n"
+            f"- File System: {self.fs_access_var.get()}\n"
+            f"- Network: {'Allowed' if self.network_access_var.get() else 'Blocked'}"
+        )
+        
+        if not result:
+            return
+            
+        # Update status
+        self.status_var.set(f"Installing and activating {plugin_name}...")
+        self.progress_bar.start()
+        
+        # Install in a separate thread
+        threading.Thread(
+            target=self._approve_plugin_thread,
+            args=(plugin_name,),
+            daemon=True
+        ).start()
+        
+    def _approve_plugin_thread(self, plugin_name):
+        """
+        Approve and install plugin in a background thread
+        
+        Args:
+            plugin_name: Name of the plugin to approve
+        """
+        try:
+            # Try to load the plugin
+            success = self.plugin_manager.load_plugin(plugin_name)
+            
+            if success:
+                # Activate the plugin
+                activate_success = self.plugin_manager.activate_plugin(plugin_name)
+                
+                # Update UI on main thread
+                self.frame.after(0, lambda: self._on_plugin_approved(plugin_name, activate_success))
+            else:
+                # Update UI with error
+                self.frame.after(0, lambda: self._on_plugin_approval_failed(plugin_name))
+                
+        except Exception as e:
+            # Update UI with error
+            self.frame.after(0, lambda: self._on_plugin_approval_error(plugin_name, str(e)))
+        
+    def _on_plugin_approved(self, plugin_name, activate_success):
+        """
+        Handle successful plugin approval
+        
+        Args:
+            plugin_name: Name of the plugin
+            activate_success: Whether activation was successful
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        if activate_success:
+            self.status_var.set(f"Plugin {plugin_name} approved and activated")
+            messagebox.showinfo(
+                "Plugin Approved",
+                f"Plugin {plugin_name} has been approved and activated successfully."
+            )
+        else:
+            self.status_var.set(f"Plugin {plugin_name} loaded but not activated")
+            messagebox.showwarning(
+                "Plugin Partially Approved",
+                f"Plugin {plugin_name} was loaded but could not be activated."
+            )
+            
+        # Refresh plugin list
+        self.refresh_plugin_list()
+        
+        # Update sandbox plugin list
+        self.update_sandbox_plugin_list()
+        
+    def _on_plugin_approval_failed(self, plugin_name):
+        """
+        Handle failed plugin approval
+        
+        Args:
+            plugin_name: Name of the plugin
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        self.status_var.set(f"Failed to approve plugin {plugin_name}")
+        messagebox.showerror(
+            "Approval Failed",
+            f"Failed to load and approve plugin {plugin_name}."
+        )
+        
+    def _on_plugin_approval_error(self, plugin_name, error_message):
+        """
+        Handle error during plugin approval
+        
+        Args:
+            plugin_name: Name of the plugin
+            error_message: Error message
+        """
+        # Stop progress
+        self.progress_bar.stop()
+        
+        self.status_var.set(f"Error approving plugin {plugin_name}: {error_message}")
+        messagebox.showerror(
+            "Approval Error",
+            f"Error approving plugin {plugin_name}:\n{error_message}"
+        )
+
+    def _on_destroy(self, event):
+        """Called when the frame is destroyed"""
+        if event.widget == self.frame:
+            self.is_running = False

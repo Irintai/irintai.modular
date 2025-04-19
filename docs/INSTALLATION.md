@@ -57,7 +57,7 @@ Ollama is required for running the language models.
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/irintai.git
+   git clone https://github.com/Irintai/irintai.modular
    cd irintai
    ```
 
@@ -181,3 +181,19 @@ If you encounter issues not covered here:
 1. Check the application logs in `data/logs/`
 2. Report issues on the GitHub repository
 3. Check the Ollama documentation for model-specific issues
+
+## Verifying Installation
+
+After installation, you can verify that everything is set up correctly using the built-in diagnostic tools:
+
+1. Run the basic diagnostic check:
+   ```
+   python diagnostics.py
+   ```
+
+2. For a more comprehensive check of all systems including plugins:
+   ```
+   python enhanced_diagnostics.py
+   ```
+
+These tools will check for any issues with your installation, configuration, dependencies, and plugin system. If any problems are found, they will provide guidance on how to fix them.

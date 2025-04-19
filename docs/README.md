@@ -117,6 +117,14 @@ Irintai includes a vector-based memory system that allows the AI to recall infor
 
 ## Troubleshooting
 
+Irintai Assistant includes robust diagnostic tools to help identify and resolve issues:
+
+- **Run diagnostics**: `python enhanced_diagnostics.py` for comprehensive system checks
+- **Auto-repair**: `python fix_plugin_manager.py` to fix common plugin issues
+- **Runtime protection**: Automatic error prevention for missing attributes
+
+For detailed troubleshooting guidance, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ### Common Issues
 
 1. **Model won't start**: 
@@ -129,14 +137,19 @@ Irintai includes a vector-based memory system that allows the AI to recall infor
    - Check if memory mode is enabled
    - Verify the index file exists
 
-3. **Performance issues**:
+3. **Plugin or threading errors**:
+   - Run enhanced diagnostics to identify and fix issues
+   - Check logs for specific error messages
+   - Verify plugin manifest files exist and are valid
+
+4. **Performance issues**:
    - Monitor resource usage in dashboard
    - Try smaller models if on limited hardware
    - Enable 8-bit mode for large models
 
 ### Logs
 
-Logs are stored in `data/logs/` and can be viewed within the application by clicking "View Logs" in the toolbar.
+Logs are stored in `data/logs/` and can be viewed within the application by clicking "View Logs" in the toolbar. The diagnostic tools can automatically analyze these logs to identify recurring issues.
 
 ## Contributing
 

@@ -13,10 +13,12 @@ d:\AI\IrintAI Assistant\
 │
 ├── utils\                      # Utility modules
 │   ├── __init__.py             # Utils module initialization
+│   ├── attribute_checker.py    # Attribute error prevention
 │   ├── file_ops.py             # File operations utilities
 │   ├── logger.py               # Logging functionality
 │   ├── plugin_dependency_manager.py # Manages plugin dependencies
 │   ├── plugin_event_bus.py     # Event communication system for plugins
+│   ├── runtime_patching.py     # Dynamic method/attribute patching
 │   ├── system_monitor.py       # System resource monitoring
 │   └── version.py              # Version information
 │
@@ -50,8 +52,11 @@ d:\AI\IrintAI Assistant\
 │   │       └── network_monitoring.py # Network monitoring implementation
 │   │
 │   └── model_training_performance\ # Model training plugin
-│       └── core\
-│           └── model_training_performance.py # Training performance tracking
+│
+├── diagnostics.py              # Basic diagnostic utility
+├── enhanced_diagnostics.py     # Comprehensive system diagnostics
+├── fix_plugin_manager.py       # Plugin manager repair utility
+├── update_plugin_manager.py    # Updates missing plugin methods
 │
 ├── data\                       # Data directory (created at runtime)
 │   ├── logs\                   # Log files

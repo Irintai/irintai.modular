@@ -43,8 +43,7 @@ data/reflections/*
 !data/reflections/.gitkeep
 
 # Config files containing sensitive information
-# (uncomment if needed)
-# data/config.json
+data/config.json
 
 # Jupyter Notebook
 .ipynb_checkpoints
@@ -57,3 +56,24 @@ htmlcov/
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Diagnostic tool outputs
+irintai_diagnostic_report.txt
+irintai_diagnostic.log
+*_diagnostic_*.log
+*_diagnostic_*.txt
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+*.bak
+
+# Plugin specific files
+data/plugins/config/*
+!data/plugins/config/.gitkeep
+data/plugins/data/*
+!data/plugins/data/.gitkeep
+
+# Runtime patching backup files
+*.patch.bak

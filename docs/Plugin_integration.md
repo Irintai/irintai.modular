@@ -6,6 +6,8 @@ Easy Installation
 Configurable Activation
 Sandboxed Execution
 Minimal Core Dependency
+Error Resilience
+Thread Safety
 
 ## Plugin Types ##
 **Core Functionality Plugins**

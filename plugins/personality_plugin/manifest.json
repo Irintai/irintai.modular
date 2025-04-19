@@ -1,0 +1,14 @@
+{
+    "name": "personality_plugin",
+    "version": "1.0.0",
+    "description": "A plugin that enhances the assistant's personality and conversation style",
+    "author": "Irintai Team",
+    "main": "__init__.py",
+    "api_version": "1.0",
+    "requires": [],
+    "settings": {
+        "enabled": true,
+        "personality_type": "friendly",
+        "conversation_style": "casual"
+    }
+}

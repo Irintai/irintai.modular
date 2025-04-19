@@ -602,22 +602,38 @@ class MainWindow:
             # Allow a short delay for clean deactivation
             time.sleep(0.5)
         except Exception as e:
-            self.logger.log(f"[Error] Failed to cleanup plugins: {e}", "ERROR")
-
+            self.logger.log(f"[Error] Failed to cleanup plugins: {e}", "ERROR")    
+            
     def initialize_plugins(self):
         """Initialize the plugin system and load available plugins"""
         # Log plugin initialization
         self.logger.log("[Plugins] Initializing plugin system")
         
-        # Set error handler
-        self.plugin_manager.set_error_handler(self.handle_plugin_error)
+        # Check if plugin manager has all required methods before using them
+        from utils.attribute_checker import check_required_attributes, verify_interface
         
-        # Register core components as services for plugins
-        self.register_plugin_services()
+        # Define required methods for plugin manager
+        required_methods = ["set_error_handler", "discover_plugins", "load_plugin", 
+                           "activate_plugin", "deactivate_plugin"]
         
-        # Discover available plugins
-        plugin_count = self.plugin_manager.discover_plugins()
-        self.logger.log(f"[Plugins] Discovered {plugin_count} plugins")
+        # Verify the plugin manager has all required methods
+        if verify_interface(self.plugin_manager, required_methods, 
+                          obj_name="PluginManager", logger=self.logger.log):
+            # Set error handler - only if the method exists
+            self.plugin_manager.set_error_handler(self.handle_plugin_error)
+            
+            # Register core components as services for plugins
+            self.register_plugin_services()
+            
+            # Discover available plugins
+            plugin_count = self.plugin_manager.discover_plugins()
+            self.logger.log(f"[Plugins] Discovered {plugin_count} plugins")
+        else:
+            self.logger.log("[ERROR] Plugin manager is missing required methods. Plugin functionality will be limited.", "ERROR")
+            # Continue with limited functionality by checking each method individually
+            if hasattr(self.plugin_manager, "discover_plugins"):
+                plugin_count = self.plugin_manager.discover_plugins()
+                self.logger.log(f"[Plugins] Discovered {plugin_count} plugins")
         
         # Get auto-load plugins from config
         autoload_plugins = self.config_manager.get("autoload_plugins", [])

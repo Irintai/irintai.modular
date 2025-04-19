@@ -65,6 +65,7 @@ class PluginManager:
         self.plugins: Dict[str, Any] = {}
         self.plugin_statuses: Dict[str, str] = {}
         self.plugin_metadata: Dict[str, Dict[str, Any]] = {}
+        self.error_handler = None
         
         # Thread safety
         self._lock = threading.Lock()
@@ -102,6 +103,147 @@ class PluginManager:
             self.log(f"[Plugin Error] Discovery failed: {e}")
             
         return discovered
+    
+    def set_error_handler(self, handler_func):
+        """
+        Set a callback function to handle plugin errors
+        
+        Args:
+            handler_func: Function that takes (plugin_name, error_message) parameters
+        """
+        self.error_handler = handler_func
+    
+    def unload_plugin(self, plugin_name):
+        """
+        Unload a specific plugin from memory
+
+        Args:
+            plugin_name (str): Name of the plugin to unload
+            
+        Returns:
+            bool: True if plugin was unloaded successfully, False otherwise
+        """
+        if plugin_name not in self.plugins:
+            self.log(f"[Plugin] Cannot unload '{plugin_name}': plugin not found")
+            return False
+            
+        # Deactivate first if active
+        if self.plugin_statuses.get(plugin_name) == self.PLUGIN_STATUS["ACTIVE"]:
+            self.deactivate_plugin(plugin_name)
+        
+        # Remove from plugins dict
+        if plugin_name in self.plugins:
+            del self.plugins[plugin_name]
+            
+        # Update status
+        self.plugin_statuses[plugin_name] = self.PLUGIN_STATUS["NOT_LOADED"]
+        
+        self.log(f"[Plugin] Unloaded plugin: {plugin_name}")
+        return True
+    
+    def unload_all_plugins(self):
+        """
+        Unload all plugins from memory
+        
+        Returns:
+            int: Number of plugins unloaded
+        """
+        plugin_names = list(self.plugins.keys())
+        count = 0
+        
+        for plugin_name in plugin_names:
+            if self.unload_plugin(plugin_name):
+                count += 1
+                
+        self.log(f"[Plugin] Unloaded {count} plugins")
+        return count
+    
+    def auto_load_plugins(self):
+        """
+        Automatically load and activate plugins marked for auto-loading
+        
+        Returns:
+            int: Number of plugins auto-loaded
+        """
+        # Check if we have access to config_manager
+        if not hasattr(self, 'core_system') or not self.core_system or 'config_manager' not in self.core_system:
+            self.log("[Plugin] Cannot auto-load plugins: no access to config manager")
+            return 0
+            
+        config_manager = self.core_system['config_manager']
+        autoload_plugins = config_manager.get("autoload_plugins", [])
+        
+        if not autoload_plugins:
+            self.log("[Plugin] No plugins marked for auto-loading")
+            return 0
+            
+        self.log(f"[Plugin] Auto-loading {len(autoload_plugins)} plugins: {', '.join(autoload_plugins)}")
+        
+        # First discover plugins if not already done
+        if not self.plugins:
+            self.discover_plugins()
+            
+        # Load and activate each plugin
+        count = 0
+        for plugin_name in autoload_plugins:
+            if plugin_name not in self.plugin_statuses or self.plugin_statuses[plugin_name] == self.PLUGIN_STATUS["NOT_LOADED"]:
+                # Load the plugin
+                if self.load_plugin(plugin_name):
+                    # Attempt to activate
+                    if self.activate_plugin(plugin_name):
+                        count += 1
+                        self.log(f"[Plugin] Auto-loaded and activated: {plugin_name}")
+                    else:
+                        self.log(f"[Plugin Warning] Auto-loaded but failed to activate: {plugin_name}")
+                    
+        return count
+        
+    def register_service(self, service_name, service_obj):
+        """
+        Register a service that plugins can access
+        
+        Args:
+            service_name (str): Name of the service
+            service_obj (object): Service object to register
+            
+        Returns:
+            bool: True if service was registered successfully
+        """
+        if not hasattr(self, 'services'):
+            self.services = {}
+            
+        self.services[service_name] = service_obj
+        self.log(f"[Plugin] Registered service: {service_name}")
+        return True
+        
+    def get_active_plugins(self):
+        """
+        Get a list of currently active plugins
+        
+        Returns:
+            list: List of active plugin names
+        """
+        active_plugins = []
+        for plugin_name, status in self.plugin_statuses.items():
+            if status == self.PLUGIN_STATUS["ACTIVE"]:
+                active_plugins.append(plugin_name)
+        return active_plugins
+    
+    def get_plugin_info(self, plugin_id):
+        """
+        Get information about a specific plugin
+        
+        Args:
+            plugin_id (str): The ID/name of the plugin
+            
+        Returns:
+            dict: Dictionary containing plugin metadata, or empty dict if plugin not found
+        """
+        if plugin_id in self.plugin_metadata:
+            return self.plugin_metadata[plugin_id]
+        else:
+            self.log(f"[Plugin Warning] Requested info for unknown plugin: {plugin_id}")
+            return {}
     
     def load_plugin(self, plugin_name: str) -> bool:
         """
@@ -300,6 +442,18 @@ class PluginManager:
             Plugin metadata dictionary
         """
         return self.plugin_metadata.get(plugin_name, {})
+    
+    def get_plugin_instance(self, plugin_id: str) -> Any:
+        """
+        Get the instance of a loaded plugin
+        
+        Args:
+            plugin_id: Name/ID of the plugin
+            
+        Returns:
+            The plugin instance or None if not found or not loaded
+        """
+        return self.plugins.get(plugin_id)
     
     def get_all_plugins(self) -> Dict[str, Dict[str, Any]]:
         """

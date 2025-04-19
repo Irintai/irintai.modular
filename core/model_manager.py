@@ -56,6 +56,8 @@ class ModelManager:
         
         # Initialize environment
         self._update_environment()
+        # Populate available models dynamically
+        self.available_models = [{'name': model} for model in self.detect_models()]
         
     def _update_environment(self) -> None:
         """Update environment variables for model path"""
@@ -479,14 +481,15 @@ class ModelManager:
             self._update_model_status(model_name, "Error checking")
             return False
             
-    def start_model(self, model_name: str, callback: Optional[Callable] = None) -> bool:
+    def start_model(self, model_name: str, callback: Optional[Callable] = None, model_config: Optional[dict] = None) -> bool:
         """
         Start running a model
-        
+
         Args:
             model_name: Name of the model to start
             callback: Optional callback for model output
-            
+            model_config: Optional configuration for the model
+
         Returns:
             True if model started successfully, False otherwise
         """
@@ -494,10 +497,10 @@ class ModelManager:
         if self.model_process and self.model_process.poll() is None:
             self.log("[Warning] A model is already running. Please stop it first.")
             return False
-        
+
         # Check if model is installed
         status = self.model_statuses.get(model_name, MODEL_STATUS["NOT_INSTALLED"])
-        
+
         if status == MODEL_STATUS["NOT_INSTALLED"]:
             # Need to install model first
             self.log(f"[Error] Model {model_name} needs to be installed first.")
@@ -513,6 +516,11 @@ class ModelManager:
             # Build the command
             cmd = ["ollama", "run", model_name]
             
+            # Apply model-specific configurations if provided
+            if model_config:
+                for key, value in model_config.items():
+                    cmd.extend([f"--{key}", str(value)])
+
             # Check if 8-bit mode is requested and handle it safely
             if self.use_8bit:
                 # First check if Ollama version supports the --quantization flag
@@ -540,8 +548,8 @@ class ModelManager:
                     else:
                         self.log("[Warning] Could not determine Ollama version, skipping quantization flag")
                 except Exception as e:
-                    self.log(f"[Warning] Error checking Ollama version: {e}. Skipping quantization flag.")
-            
+                    self.log(f"[Error] Failed to check quantization support: {e}")
+
             # Create a thread to handle model execution
             threading.Thread(
                 target=self._run_model_process,
@@ -551,10 +559,10 @@ class ModelManager:
             
             return True
         except Exception as e:
-            self.log(f"[Error Starting Model] {e}")
-            self._update_model_status(model_name, MODEL_STATUS["ERROR"])
+            self.log(f"[Error] Failed to start model {model_name}: {e}")
+            self._update_model_status(model_name, "Error starting")
             return False
-            
+        
     def _run_model_process(self, cmd: List[str], model_name: str, callback: Optional[Callable]) -> None:
         """
         Run the model process in a separate thread
@@ -1059,3 +1067,28 @@ class ModelManager:
             self._update_model_status(model_name, MODEL_STATUS["ERROR"])
             callback("error", str(e))
             return False
+        
+    def get_model_config(self, model_name):
+        """
+        Get configuration details for a specific model
+        
+        Args:
+            model_name (str): Name of the model
+            
+        Returns:
+            dict: Model configuration or None if model not found
+        """
+        # Check if model exists in available models
+        for model in self.available_models:
+            if model['name'] == model_name:
+                return model
+                
+        # If model not found in available models, check if it's a custom model
+        custom_models = self.config.get("models.custom_models", [])
+        for model in custom_models:
+            if model['name'] == model_name:
+                return model
+        
+        # Model not found
+        self.logger(f"[ModelManager] Model config not found for: {model_name}")
+        return None

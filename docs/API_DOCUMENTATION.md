@@ -388,3 +388,55 @@ def my_logger(message):
 # Then pass to components
 model_manager = ModelManager(model_path, logger=my_logger)
 ```
+
+## Utility APIs
+
+### Runtime Patching
+
+The `runtime_patching` module provides tools to prevent attribute errors by dynamically adding missing methods and attributes:
+
+```python
+from utils.runtime_patching import ensure_method_exists, ensure_attribute_exists, patch_plugin_manager
+
+# Add missing attribute to an object
+ensure_attribute_exists(obj, "config", default_value={})
+
+# Add missing method to an object
+def default_implementation(self, arg1):
+    return f"Default implementation with {arg1}"
+    
+ensure_method_exists(obj, "missing_method", default_implementation)
+
+# Add common methods to plugin manager
+plugin_manager = patch_plugin_manager(plugin_manager)
+```
+
+#### Key Functions
+
+```python
+# Check if attribute exists and add if missing
+ensure_attribute_exists(obj, attr_name, default_value=None) -> bool
+
+# Check if method exists and add default implementation if missing
+ensure_method_exists(obj, method_name, default_implementation=None) -> bool
+
+# Add commonly missing methods to the plugin manager
+patch_plugin_manager(plugin_manager) -> plugin_manager
+```
+
+### Attribute Checker
+
+The `attribute_checker` module provides tools for validating that objects have required attributes:
+
+```python
+from utils.attribute_checker import check_required_attributes, has_attribute
+
+# Check if an object has all required attributes
+missing_attrs = check_required_attributes(obj, ["name", "version", "activate"])
+if missing_attrs:
+    print(f"Missing attributes: {missing_attrs}")
+
+# Check if a specific attribute exists and is callable
+if not has_attribute(obj, "handle_event", callable_only=True):
+    print("Object is missing required callable 'handle_event'")
+```

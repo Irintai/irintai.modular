@@ -2,9 +2,11 @@
   "temperature": 0.7,
   "use_8bit": false,
   "model_path": "F:/AI/irintai/data/models/ollama-home/models",
+  "model": "llama3",
   "inference_mode": "GPU",
   "memory_mode": "Background",
   "nsfw_enabled": false,
+  "system_message": "You are Irintai, a helpful and knowledgeable assistant.",
   "system_prompt": "You are Irintai, a helpful and knowledgeable assistant.",
   "theme": "Dark",
   "font_size": 10,
@@ -21,5 +23,8 @@
   "keep_backup_logs": true,
   "check_updates": true,
   "start_minimized": false,
-  "confirm_exit": true
+  "confirm_exit": true,
+  "autoload_plugins": [
+    "personality_plugin"
+  ]
 }

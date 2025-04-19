@@ -14,6 +14,9 @@ Irintai uses a containerized plugin architecture that provides:
 4. **Dependency Management**: Plugins can declare dependencies on other plugins
 5. **Configuration Management**: Plugins can have user-configurable settings
 6. **Sandboxed File Operations**: Plugins have limited access to the file system for security
+7. **Error Handling**: Robust error handling with dedicated error callbacks
+8. **Runtime Attribute Protection**: Automatic protection against missing attribute errors
+9. **Thread Safety**: Tools for ensuring UI thread safety in plugin components
 
 ## Creating a Plugin
 

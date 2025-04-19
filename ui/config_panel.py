@@ -10,11 +10,11 @@ from typing import Callable, Dict, List, Any, Optional
 
 class ConfigPanel:
     """Configuration panel for managing application settings"""
-    
+
     def __init__(self, parent, config_manager, model_manager, memory_system, chat_engine, logger: Callable, on_config_updated: Callable):
         """
         Initialize the configuration panel
-        
+
         Args:
             parent: Parent widget
             config_manager: ConfigManager instance
@@ -31,10 +31,13 @@ class ConfigPanel:
         self.chat_engine = chat_engine
         self.log = logger
         self.on_config_updated_callback = on_config_updated
-        
+
         # Create the main frame
         self.frame = ttk.Frame(parent)
-        
+
+        # Initialize dictionary for plugin settings widgets <<< ADD THIS LINE
+        self.plugin_settings_widgets = {}
+
         # Initialize UI components
         self.initialize_ui()
         

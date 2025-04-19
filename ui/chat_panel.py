@@ -5,14 +5,16 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext
 import time
 from typing import Callable, Optional, Dict, List, Any
+import threading
+from core.model_manager import MODEL_STATUS
 
 class ChatPanel:
     """Chat interface panel for user interaction with the AI assistant"""
-    
+
     def __init__(self, parent, chat_engine, logger: Callable, config_manager):
         """
         Initialize the chat panel
-        
+
         Args:
             parent: Parent widget
             chat_engine: ChatEngine instance
@@ -23,22 +25,22 @@ class ChatPanel:
         self.chat_engine = chat_engine
         self.log = logger
         self.config_manager = config_manager
-        
+
         # Create the main frame
         self.frame = ttk.Frame(parent)
-        
+
         # Initialize UI components
         self.initialize_ui()
-        
-        # Initialize plugin hooks AFTER UI components are created
+
+        # Initialize plugin hooks 
         self.initialize_plugin_hooks()
-        
+
         # Load chat history
         self.load_chat_history()
-        
-        # Update status indicators
+
+        # Update status indicators 
         self.update_status_indicators()
-        
+
         # Set up keyboard shortcuts
         self.attach_keyboard_shortcuts()
         
@@ -136,19 +138,28 @@ class ChatPanel:
             text="Save Current as Preset", 
             command=self.save_system_preset
         ).pack(side=tk.LEFT)
-        
+    
     def create_chat_console(self):
         """Create the chat console display area"""
         chat_frame = ttk.Frame(self.frame)
         chat_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         
+        # Create a labeled frame for the chat console
+        chat_label_frame = ttk.LabelFrame(chat_frame, text="Chat Window")
+        chat_label_frame.pack(fill=tk.BOTH, expand=True)
+        
         # Create the console with better styling
         self.console = scrolledtext.ScrolledText(
-            chat_frame, 
+            chat_label_frame, 
             wrap=tk.WORD, 
-            font=("Helvetica", 10)
+            font=("Helvetica", 10),
+            width=80,
+            height=20
         )
-        self.console.pack(fill=tk.BOTH, expand=True)
+        self.console.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Make console read-only
+        self.console.config(state=tk.DISABLED)
         
         # Configure text tags for better formatting
         self.console.tag_configure(
@@ -312,6 +323,9 @@ class ChatPanel:
         # Log the change
         self.log(f"[System Prompt] Applied: {system_prompt}")
         
+        # Enable text insertion
+        self.console.config(state=tk.NORMAL)
+        
         # Show in console
         self.console.insert(
             tk.END,
@@ -319,6 +333,9 @@ class ChatPanel:
             "system"
         )
         self.console.see(tk.END)
+        
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
         
     def on_system_preset_selected(self, event):
         """Handle system prompt preset selection"""
@@ -345,11 +362,17 @@ class ChatPanel:
             self.log(f"[System Preset] Saved: {current}")
         else:
             self.log("[System Preset] This preset already exists")
-            
+    
     def load_chat_history(self):
         """Load and display chat history"""
+        # Enable text insertion
+        self.console.config(state=tk.NORMAL)
+        
         # Clear the console first
         self.console.delete(1.0, tk.END)
+        
+        # Make console read-only between operations
+        self.console.config(state=tk.DISABLED)
         
         # Get history from chat engine
         history = self.chat_engine.chat_history
@@ -367,7 +390,29 @@ class ChatPanel:
                 
         # Update timeline
         self.update_timeline()
-        
+
+    def update_status_indicators(self): # <<< MODIFY THIS METHOD
+        """Update the status indicator based on the model's status."""
+        if hasattr(self, 'status_light') and hasattr(self.chat_engine, 'model_manager'):
+            model_manager = self.chat_engine.model_manager
+            is_running = model_manager.model_process and model_manager.model_process.poll() is None
+            current_status = model_manager.model_statuses.get(model_manager.current_model, "Unknown")
+
+            # Use the imported MODEL_STATUS dictionary
+            if is_running and current_status == MODEL_STATUS["RUNNING"]:
+                self.status_light.config(foreground="green", text="● Running")
+            elif current_status == MODEL_STATUS["LOADING"]:
+                 self.status_light.config(foreground="orange", text="● Loading")
+            elif current_status == MODEL_STATUS["ERROR"]:
+                self.status_light.config(foreground="red", text="● Error")
+            else:
+                self.status_light.config(foreground="red", text="● Stopped")
+            self.frame.after(5000, self.update_status_indicators) # Check every 5 seconds
+
+    def attach_keyboard_shortcuts(self): 
+        """Attach keyboard shortcuts to the input entry."""
+
+        self.prompt_entry.bind("<Control-Return>", self.submit_prompt)
     def display_user_message(self, content, timestamp=None):
         """
         Display a user message in the console
@@ -378,6 +423,9 @@ class ChatPanel:
         """
         if not timestamp:
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            
+        # Enable text insertion
+        self.console.config(state=tk.NORMAL)
             
         # Add timestamp
         self.console.insert(
@@ -400,9 +448,15 @@ class ChatPanel:
             "user_message"
         )
         
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
+        
         # Scroll to end
         self.console.see(tk.END)
         
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
+    
     def display_assistant_message(self, content, timestamp=None):
         """
         Display an assistant message in the console
@@ -416,6 +470,9 @@ class ChatPanel:
             
         # Process content through plugin hooks
         processed_content = self.process_message_hooks(content, "assistant")
+        
+        # Enable text insertion
+        self.console.config(state=tk.NORMAL)
             
         # Add timestamp
         self.console.insert(
@@ -438,8 +495,14 @@ class ChatPanel:
             "irintai_message"
         )
         
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
+        
         # Scroll to end
         self.console.see(tk.END)
+        
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
         
     def submit_prompt(self, event=None):
         """Submit the user prompt"""
@@ -580,10 +643,22 @@ class ChatPanel:
             self.console.yview_moveto(current_pos[0])
         else:
             self.console.see(tk.END)
-            
+        
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
+    
     def clear_console(self):
         """Clear the console display"""
+        # Enable text insertion
+        self.console.config(state=tk.NORMAL)
+        
+        # Clear the console
         self.console.delete(1.0, tk.END)
+        
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
+        
+        self.log("[Chat] Console cleared")
         
     def save_conversation(self):
         """Save the conversation to a file"""
@@ -652,6 +727,9 @@ class ChatPanel:
                 "system"
             )
             self.console.see(tk.END)
+            
+            # Make console read-only again
+            self.console.config(state=tk.DISABLED)
         else:
             self.log(f"[Error] Failed to start model {model_name}")
             
@@ -668,6 +746,9 @@ class ChatPanel:
                 "system"
             )
             self.console.see(tk.END)
+            
+            # Make console read-only again
+            self.console.config(state=tk.DISABLED)
         else:
             self.log("[Error] Failed to stop model or no model running")
             
@@ -699,40 +780,46 @@ class ChatPanel:
                 "system"
             )
             self.console.see(tk.END)
+        
+        # Make console read-only again
+        self.console.config(state=tk.DISABLED)
 
     # Extension point system for the chat panel
     def initialize_plugin_hooks(self):
         """Initialize plugin extension points"""
         # Dictionary of registered UI hooks by plugin ID
         self.plugin_ui_extensions = {}
-        
-        # Extension frames
+
+        # 1. Identify the original parent of the chat console frame
+        chat_console_parent = self.console.master.master 
+
+        # 2. Create the main PanedWindow as a child of the original parent
+        self.main_paned = ttk.PanedWindow(chat_console_parent, orient=tk.HORIZONTAL)
+        # Pack the paned window to replace the original chat_frame's packing
+        self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5) 
+
+        # 3. Create the left frame for the console within the PanedWindow
+        left_console_pane = ttk.Frame(self.main_paned)
+        self.main_paned.add(left_console_pane, weight=3) 
+
+        # 4. Move the console ScrolledText widget into the new left pane frame
+        self.console.pack_forget() 
+        self.console.pack(in_=left_console_pane, fill=tk.BOTH, expand=True) 
+
+        # 5. Create the right frame for plugin extensions
         self.extension_frames = {
-            "top_bar": ttk.Frame(self.frame),
-            "side_panel": ttk.Frame(self.frame),
-            "bottom_bar": ttk.Frame(self.frame),
-            "floating": None  # Will be created on demand
+            "top_bar": ttk.Frame(self.frame), 
+            "side_panel": ttk.Frame(self.main_paned), 
+            "bottom_bar": ttk.Frame(self.frame), 
+            "floating": None
         }
-        
-        # Position the extension frames
-        self.extension_frames["top_bar"].pack(fill=tk.X, padx=5, pady=5, after=self.system_frame)
-        
-        # Side panel is positioned to the right of the chat console
-        chat_console_frame = self.console.master
-        chat_console_frame.pack_forget()
-        
-        # Create a horizontal paned window for the main content
-        self.main_paned = ttk.PanedWindow(self.frame, orient=tk.HORIZONTAL)
-        self.main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
-        # Add the chat console back
-        self.main_paned.add(chat_console_frame, weight=3)
-        
-        # Add side panel frame - initially empty
+        # Add the side panel frame to the right pane of the PanedWindow
         self.main_paned.add(self.extension_frames["side_panel"], weight=1)
-        
-        # Bottom bar goes after the input section
-        self.extension_frames["bottom_bar"].pack(fill=tk.X, padx=5, pady=5, after=self.input_frame)
+
+        # Position the other extension frames relative to the main ChatPanel frame
+        # Ensure these pack relative to self.frame, *not* chat_console_parent or main_paned
+        self.extension_frames["top_bar"].pack(in_=self.frame, fill=tk.X, padx=5, pady=5, before=self.main_paned)
+        self.extension_frames["bottom_bar"].pack(in_=self.frame, fill=tk.X, padx=5, pady=5, after=self.main_paned)
         
         # Register notification methods for plugins
         self.register_plugin_callbacks()

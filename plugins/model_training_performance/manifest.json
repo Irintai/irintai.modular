@@ -1,0 +1,14 @@
+{
+    "name": "model_training_performance",
+    "version": "1.0.0",
+    "description": "A plugin for monitoring and analyzing model training performance",
+    "author": "Irintai Team",
+    "main": "__init__.py",
+    "api_version": "1.0",
+    "requires": [],
+    "settings": {
+        "enabled": true,
+        "monitoring_interval": 60,
+        "alert_threshold": 0.8
+    }
+}
