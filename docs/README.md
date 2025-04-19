@@ -30,7 +30,7 @@ Irintai Assistant is a desktop application that provides an interface for intera
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/irintai.git
+   git clone https://github.com/irintai/irintai.git
    cd irintai
    ```
 
