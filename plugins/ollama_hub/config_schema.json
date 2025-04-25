@@ -1,0 +1,20 @@
+{
+    "type": "object",
+    "properties": {
+        "server_url": {
+            "type": "string",
+            "label": "Ollama Server URL",
+            "description": "URL of the Ollama server, including port",
+            "default": "http://localhost:11434"
+        },
+        "auto_connect": {
+            "type": "boolean",
+            "label": "Auto Connect",
+            "description": "Automatically connect to Ollama server when the plugin is activated",
+            "default": true
+        }
+    },
+    "required": [
+        "server_url"
+    ]
+}

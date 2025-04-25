@@ -13,17 +13,22 @@ from core import ModelManager, ChatEngine, MemorySystem, ConfigManager
 
 # Import utility modules
 from utils import IrintaiLogger, SystemMonitor, FileOps
+from plugins.ollama_hub.core.ollama_hub_integrator import integrate_ollama_hub_ui
 
 # Import UI components
-from .chat_panel import ChatPanel
-from .model_panel import ModelPanel
-from .config_panel import ConfigPanel
-from .log_viewer import LogViewer
-from .memory_panel import MemoryPanel
-from .resource_monitor_panel import ResourceMonitorPanel
+from ui.panels.chat_panel import ChatPanel
+from ui.panels.model_panel import ModelPanel
+from ui.panels.memory_panel import MemoryPanel
+from ui.panels.resource_monitor_panel import ResourceMonitorPanel
+from ui.panels.plugin_panel import PluginPanel
+from ui.panels.config_panel import ConfigPanel
+from log_viewer import LogViewer
 from core.plugin_manager import PluginManager
-from ui.plugin_panel import PluginPanel
-from .plugin_config_panel import PluginConfigPanel
+from plugins.plugin_config_panel import PluginConfigPanel
+from ui.dashboard import Dashboard
+
+# Import the new unified settings panel
+from ui.panels.unified_settings_panel import UnifiedSettingsPanel
 
 class MainWindow:
     """Main application window for the Irintai assistant"""
@@ -189,18 +194,17 @@ class MainWindow:
             self.on_model_selected
         )
         self.notebook.add(self.model_panel.frame, text="Models")
-        
-        # Create memory panel
+          # Create memory panel
         self.memory_panel = MemoryPanel(
             self.notebook,
             self.memory_system,
             self.file_ops,
             self.logger.log,
-            self.chat_engine
+            self.chat_engine,
+            settings_manager=self.core_app["settings_manager"]  # Pass settings_manager
         )
         self.notebook.add(self.memory_panel.frame, text="Memory")
-        
-        # Create resource monitor panel
+          # Create resource monitor panel
         self.resource_monitor = ResourceMonitorPanel(
             self.notebook,
             self.logger.log,
@@ -208,34 +212,26 @@ class MainWindow:
         )
         self.notebook.add(self.resource_monitor.frame, text="Resources")
         
-        # Create config panel
-        self.config_panel = ConfigPanel(
+        # Create unified settings panel that consolidates all settings in one place
+        self.settings_panel = UnifiedSettingsPanel(
             self.notebook,
-            self.config_manager,
-            self.model_manager,
-            self.memory_system,
-            self.chat_engine,
-            self.logger.log,
-            self.on_config_updated
+            self.core_app["settings_manager"],
+            self.core_app,
+            logger=self.logger.log
         )
-        self.notebook.add(self.config_panel.frame, text="Settings")
-        
-        # Create plugin panel
+        self.notebook.add(self.settings_panel.frame, text="Settings")# Create plugin panel with integrated settings tab
         self.plugin_panel = PluginPanel(
             self.notebook,
             self.plugin_manager,
+            config_manager=self.config_manager,
             logger=self.logger.log
         )
         self.notebook.add(self.plugin_panel.frame, text="Plugins")
         
-        # Create plugin config panel
-        self.plugin_config_panel = PluginConfigPanel(
-            self.notebook,
-            self.plugin_manager,
-            self.config_manager,
-            self.logger.log
-        )
-        self.notebook.add(self.plugin_config_panel.frame, text="Plugin Settings")
+        # Create Ollama Hub tab if the plugin is active
+        integrate_ollama_hub_ui(self.notebook, self.plugin_manager, self.logger.log)
+        
+        # Plugin Settings are now integrated in the plugin panel's tabs
         
         # Create status bar
         self.create_status_bar()
@@ -481,7 +477,6 @@ class MainWindow:
             
     def show_dashboard(self):
         """Show the dashboard dialog"""
-        from .dashboard import Dashboard
         
         Dashboard(
             self.root,
@@ -605,179 +600,92 @@ class MainWindow:
             self.logger.log(f"[Error] Failed to cleanup plugins: {e}", "ERROR")    
             
     def initialize_plugins(self):
-        """Initialize the plugin system and load available plugins"""
-        # Log plugin initialization
-        self.logger.log("[Plugins] Initializing plugin system")
+        """Initialize plugins and register event handlers"""
+        if not hasattr(self, 'plugin_manager') or not self.plugin_manager:
+            return
         
-        # Check if plugin manager has all required methods before using them
-        from utils.attribute_checker import check_required_attributes, verify_interface
-        
-        # Define required methods for plugin manager
-        required_methods = ["set_error_handler", "discover_plugins", "load_plugin", 
-                           "activate_plugin", "deactivate_plugin"]
-        
-        # Verify the plugin manager has all required methods
-        if verify_interface(self.plugin_manager, required_methods, 
-                          obj_name="PluginManager", logger=self.logger.log):
-            # Set error handler - only if the method exists
-            self.plugin_manager.set_error_handler(self.handle_plugin_error)
-            
-            # Register core components as services for plugins
-            self.register_plugin_services()
-            
-            # Discover available plugins
-            plugin_count = self.plugin_manager.discover_plugins()
-            self.logger.log(f"[Plugins] Discovered {plugin_count} plugins")
-        else:
-            self.logger.log("[ERROR] Plugin manager is missing required methods. Plugin functionality will be limited.", "ERROR")
-            # Continue with limited functionality by checking each method individually
-            if hasattr(self.plugin_manager, "discover_plugins"):
-                plugin_count = self.plugin_manager.discover_plugins()
-                self.logger.log(f"[Plugins] Discovered {plugin_count} plugins")
-        
-        # Get auto-load plugins from config
-        autoload_plugins = self.config_manager.get("autoload_plugins", [])
-        
-        # Auto-load plugins
-        if autoload_plugins:
-            self.logger.log(f"[Plugins] Auto-loading {len(autoload_plugins)} plugins")
-            for plugin_name in autoload_plugins:
-                success = self.plugin_manager.load_plugin(plugin_name)
-                if success:
-                    # Auto-activate plugin if in the list
-                    activate = self.config_manager.get(f"autoactivate.{plugin_name}", False)
-                    if activate:
-                        self.plugin_manager.activate_plugin(plugin_name)
-        
-        # Register for plugin events
-        self.plugin_manager.register_event_handler("main_window", "plugin_loaded", self.on_plugin_loaded)
-        self.plugin_manager.register_event_handler("main_window", "plugin_activated", self.on_plugin_activated)
-        self.plugin_manager.register_event_handler("main_window", "plugin_deactivated", self.on_plugin_deactivated)
-        self.plugin_manager.register_event_handler("main_window", "plugin_unloaded", self.on_plugin_unloaded)
-        self.plugin_manager.register_event_handler("main_window", "plugin_error", self.on_plugin_error)
-
-    def register_plugin_services(self):
-        """Register core services for plugins to access"""
-        # Register core components as services
-        services = {
-            "logger": self.logger,
-            "model_manager": self.model_manager,
-            "chat_engine": self.chat_engine,
-            "memory_system": self.memory_system,
-            "config_manager": self.config_manager,
-            "system_monitor": self.system_monitor,
-            "file_ops": self.file_ops
-        }
-        
-        # Add UI components (only if they're already initialized)
-        if hasattr(self, 'chat_panel'):
-            services["chat_panel"] = self.chat_panel
-            
-        if hasattr(self, 'model_panel'):
-            services["model_panel"] = self.model_panel
-            
-        if hasattr(self, 'memory_panel'):
-            services["memory_panel"] = self.memory_panel
-        
-        # Register each service
-        for name, service in services.items():
-            self.plugin_manager.register_service(name, service)
-        
-        self.logger.log(f"[Plugins] Registered {len(services)} core services for plugins")
-
-    def handle_plugin_error(self, plugin_name, error_msg, error_type="ERROR"):
-        """
-        Handle plugin errors
-        
-        Args:
-            plugin_name: Name of the plugin
-            error_msg: Error message
-            error_type: Type of error (ERROR, WARNING)
-        """
-        # Log the error
-        self.logger.log(f"[Plugin Error] {plugin_name}: {error_msg}", error_type)
-        
-        # Update the plugin panel if it exists
-        if hasattr(self, 'plugin_panel'):
-            self.plugin_panel.refresh_plugin_list()
-            
-        # Show critical errors in UI
-        if error_type == "ERROR" and self.config_manager.get("show_plugin_errors", True):
-            messagebox.showerror(
-                f"Plugin Error: {plugin_name}",
-                f"An error occurred in plugin '{plugin_name}':\n\n{error_msg}"
+        # Register event handlers for plugin activation/deactivation
+        if hasattr(self.plugin_manager, 'register_event_handler'):
+            # Register handler for plugin activation
+            self.plugin_manager.register_event_handler(
+                "main_window", 
+                "plugin_activated", 
+                self.on_plugin_activated
             )
+            
+            # Register handler for plugin deactivation
+            self.plugin_manager.register_event_handler(
+                "main_window", 
+                "plugin_deactivated", 
+                self.on_plugin_deactivated
+            )
+            
+            # Register handlers for other plugin events
+            self.plugin_manager.register_event_handler(
+                "main_window", 
+                "plugin_loaded", 
+                self.on_plugin_loaded
+            )
+            
+            self.plugin_manager.register_event_handler(
+                "main_window", 
+                "plugin_unloaded", 
+                self.on_plugin_unloaded
+            )
+            
+            self.plugin_manager.register_event_handler(
+                "main_window", 
+                "plugin_error", 
+                self.on_plugin_error
+            )
+            
+            self.logger.log("[Plugin Events] Registered handlers for plugin events")
+            
+    def integrate_ollama_hub(self):
+        """Dynamically integrate the Ollama Hub UI if the plugin is active"""
+        # Check if the Ollama Hub tab already exists
+        for i in range(self.notebook.index("end")):
+            if self.notebook.tab(i, "text") == "Ollama Hub":
+                self.logger.log("[UI] Ollama Hub tab already present; skipping add.")
+                return False
+        
+        # Call the integration function to add the tab
+        result = integrate_ollama_hub_ui(self.notebook, self.plugin_manager, self.logger.log)
+        
+        if result:
+            self.logger.log("[UI] Ollama Hub tab dynamically added (integration successful)")
+        else:
+            self.logger.log("[UI] Ollama Hub tab integration attempted but not added (plugin not active or integration failed)")
+        
+        return result
 
-    def on_plugin_loaded(self, plugin_id, plugin_instance):
-        """
-        Handle plugin loaded event
-        
-        Args:
-            plugin_id: Plugin identifier
-            plugin_instance: Plugin instance
-        """
-        self.logger.log(f"[Plugins] Loaded plugin: {plugin_id}")
-        
-        # Update UI if needed
-        if hasattr(self, 'plugin_panel'):
-            self.plugin_panel.refresh_plugin_list()
+    def on_plugin_activated(self, plugin_id, **kwargs):
+        self.logger.log(f"[Plugin Events] Plugin activated: {plugin_id} (event handler called)")
+        self.update_plugin_menu()
+        if plugin_id == "ollama_hub":
+            self.logger.log("[Plugin Events] Ollama Hub plugin activated; attempting to add tab.")
+            self.integrate_ollama_hub()
+        return True
 
-    def on_plugin_activated(self, plugin_id, plugin_instance):
-        """
-        Handle plugin activation event
-        
-        Args:
-            plugin_id: Plugin identifier
-            plugin_instance: Plugin instance
-        """
-        self.logger.log(f"[Plugins] Activated plugin: {plugin_id}")
-        
-        # Update plugin state in config for auto-activation
-        if self.config_manager.get(f"remember_plugin_state", True):
-            self.config_manager.set(f"autoactivate.{plugin_id}", True)
-            self.config_manager.save_config()
-        
-        # Update UI
-        if hasattr(self, 'plugin_panel'):
-            self.plugin_panel.refresh_plugin_list()
+    def on_plugin_deactivated(self, plugin_id, **kwargs):
+        self.logger.log(f"[Plugin Events] Plugin deactivated: {plugin_id} (event handler called)")
+        self.update_plugin_menu()
+        if plugin_id == "ollama_hub":
+            for i in range(self.notebook.index("end")):
+                if self.notebook.tab(i, "text") == "Ollama Hub":
+                    self.notebook.forget(i)
+                    self.logger.log("[UI] Ollama Hub tab removed (plugin deactivated)")
+                    break
+        return True
 
-    def on_plugin_deactivated(self, plugin_id):
-        """
-        Handle plugin deactivation event
-        
-        Args:
-            plugin_id: Plugin identifier
-        """
-        self.logger.log(f"[Plugins] Deactivated plugin: {plugin_id}")
-        
-        # Update plugin state in config
-        if self.config_manager.get(f"remember_plugin_state", True):
-            self.config_manager.set(f"autoactivate.{plugin_id}", False)
-            self.config_manager.save_config()
-        
-        # Update UI
-        if hasattr(self, 'plugin_panel'):
-            self.plugin_panel.refresh_plugin_list()
+    def on_plugin_loaded(self, plugin_id, **kwargs):
+        self.logger.log(f"[Plugin Events] Plugin loaded: {plugin_id} (event handler called)")
+        return True
 
-    def on_plugin_unloaded(self, plugin_id):
-        """
-        Handle plugin unloaded event
-        
-        Args:
-            plugin_id: Plugin identifier
-        """
-        self.logger.log(f"[Plugins] Unloaded plugin: {plugin_id}")
-        
-        # Update UI
-        if hasattr(self, 'plugin_panel'):
-            self.plugin_panel.refresh_plugin_list()
+    def on_plugin_unloaded(self, plugin_id, **kwargs):
+        self.logger.log(f"[Plugin Events] Plugin unloaded: {plugin_id} (event handler called)")
+        return True
 
-    def on_plugin_error(self, plugin_id, error_msg):
-        """
-        Handle plugin error event
-        
-        Args:
-            plugin_id: Plugin identifier
-            error_msg: Error message
-        """
-        self.handle_plugin_error(plugin_id, error_msg)
+    def on_plugin_error(self, plugin_id, error_message, **kwargs):
+        self.logger.log(f"[Plugin Error] {plugin_id}: {error_message} (event handler called)")
+        return True

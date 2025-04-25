@@ -73,7 +73,19 @@ class MemorySystem:
                 return []
                 
         try:
-            return self.model.encode(texts, convert_to_tensor=True)
+            embeddings = self.model.encode(texts, convert_to_tensor=True)
+            
+            # Handle different return types from different model implementations
+            if isinstance(embeddings, list):
+                return embeddings
+            elif isinstance(embeddings, torch.Tensor):
+                # If it's a single tensor with shape [batch_size, embedding_dim]
+                # Convert to list of tensors with shape [embedding_dim]
+                return [embeddings[i] for i in range(embeddings.shape[0])]
+            else:
+                self.log(f"[Memory Warning] Unexpected embedding type: {type(embeddings)}")
+                return []
+                
         except Exception as e:
             self.log(f"[Memory Error] Failed to embed texts: {e}")
             return []
@@ -101,7 +113,7 @@ class MemorySystem:
             # Get embeddings
             embeddings = self.embed_texts(docs)
             
-            if not embeddings:
+            if len(embeddings) == 0:
                 return False
                 
             # Add to index
@@ -206,17 +218,44 @@ class MemorySystem:
             return False
             
         try:
-            with open(self.index_path, "r", encoding="utf-8") as f:
+            # Use utf-8-sig to handle UTF-8 BOM (Byte Order Mark)
+            with open(self.index_path, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
                 
             # Clear current index
             self.index = []
             self.documents = []
             
-            # Load index
-            for item in data:
-                self.index.append(torch.tensor(item["embedding"]))
-                self.documents.append(item["meta"])
+            # Check if data is a list or dict
+            if isinstance(data, list):
+                # Load index (list format)
+                for item in data:
+                    if not isinstance(item, dict):
+                        self.log(f"[Memory Warning] Invalid item format in index: {type(item)}")
+                        continue
+                    if "embedding" in item and "meta" in item:
+                        self.index.append(torch.tensor(item["embedding"]))
+                        self.documents.append(item["meta"])
+                    else:
+                        self.log(f"[Memory Warning] Missing embedding or meta in item")
+            elif isinstance(data, dict):
+                # Alternative format (dict with embeddings and documents)
+                if "embeddings" in data and "documents" in data:
+                    embeddings = data["embeddings"]
+                    documents = data["documents"]
+                    if len(embeddings) == len(documents):
+                        for emb, doc in zip(embeddings, documents):
+                            self.index.append(torch.tensor(emb))
+                            self.documents.append(doc)
+                    else:
+                        self.log("[Memory Error] Mismatched lengths of embeddings and documents")
+                        return False
+                else:
+                    self.log("[Memory Error] Invalid index format: missing embeddings or documents")
+                    return False
+            else:
+                self.log(f"[Memory Error] Invalid index data type: {type(data)}")
+                return False
                 
             self.log(f"[Memory] Loaded {len(self.index)} items from index")
             return True

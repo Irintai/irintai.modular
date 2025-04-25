@@ -1,8 +1,9 @@
 """
 Personality Plugin for Irintai Assistant
 """
-from .core.personality_plugin import PersonalityPlugin
-from .ui.panel import Panel
+from IrintAI Assistant.plugins.personality_plugin.core.personality_plugin import PersonalityPlugin
+from IrintAI Assistant.plugins.personality_plugin.ui.panel import Panel
+from IrintAI Assistant.plugins.personality_plugin.config_handler import ConfigHandler
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import threading
@@ -78,7 +79,7 @@ class IrintaiPlugin:
     
     def deactivate(self):
         """Deactivate the plugin"""
-        return self.plugin.deactivate()
+        return self.plugin.deactivate()    
     
     def update_configuration(self, **kwargs):
         """Update plugin configuration"""
@@ -87,20 +88,83 @@ class IrintaiPlugin:
     def get_status(self):
         """Get plugin status"""
         return self.plugin.get_status()
-
-    # Module-level UI activation function
-    def activate_ui(container):
+        
+    def get_config_schema(self):
         """
-        Create and activate UI for the plugin when loaded by the plugin manager
+        Get configuration schema for the plugin settings UI
+        
+        Returns:
+            Dictionary with configuration schema
+        """
+        # Return a fixed schema that maps to the plugin's configuration
+        return {
+            "active_profile": {
+                "type": "choice",
+                "label": "Active Profile",
+                "description": "The personality profile to use for conversations",
+                "options": self.plugin.get_available_profiles(),
+                "default": self.plugin.get_active_profile_name() or ""
+            },
+            "auto_remember": {
+                "type": "boolean",
+                "label": "Remember Personality",
+                "description": "Store personality attributes in memory for context-aware responses",
+                "default": True
+            }
+        }
+    
+    def get_configuration(self):
+        """
+        Get current plugin configuration
+        
+        Returns:
+            Dictionary with current configuration values
+        """
+        return {
+            "active_profile": self.plugin.get_active_profile_name(),
+            "auto_remember": self.plugin.get_auto_remember_setting()
+        }
+    
+    def on_config_changed(self, new_config):
+        """
+        Handle configuration changes from the plugin settings panel
         
         Args:
-            container: UI container to place panel in
+            new_config: New configuration values
             
         Returns:
-            The activated UI panel
+            True if configuration was applied successfully
         """
-        from .ui import activate_ui as ui_activator
-        return ui_activator(container)
+        # Apply the new configuration
+        try:
+            # Update active profile if specified
+            if "active_profile" in new_config and new_config["active_profile"]:
+                profile_name = new_config["active_profile"]
+                if profile_name in self.plugin.get_available_profiles():
+                    self.plugin.set_active_profile(profile_name)
+            
+            # Update auto remember setting if specified
+            if "auto_remember" in new_config:
+                self.plugin.set_auto_remember(new_config["auto_remember"])
+                
+            # Save settings
+            return self.plugin.update_configuration(**new_config)
+        except Exception as e:
+            if hasattr(self, 'plugin') and hasattr(self.plugin, '_logger'):
+                self.plugin._logger(f"Error applying configuration changes: {e}", "ERROR")
+            return False    # Module-level UI activation function
+    def activate_ui(container):
+            """
+            Create and activate UI for the plugin when loaded by the plugin manager
+            
+            Args:
+                container: UI container to place panel in
+                
+            Returns:
+                The activated UI panel
+            """
+from IrintAI Assistant.plugins.personality_plugin.ui import activate_ui as ui_activator
+            return ui_activator(container)
 
     # Add these methods to the IrintaiPlugin class to complete the implementation:
 
@@ -244,7 +308,7 @@ class IrintaiPlugin:
             Plugin instance
         """
         # Import the bridge
-        from .bridge import PersonalityBridge
+from IrintAI Assistant.plugins.personality_plugin.bridge import PersonalityBridge
         
         # Apply compatibility bridge
         bridge = PersonalityBridge(core_system)
@@ -405,7 +469,7 @@ class IrintaiPlugin:
             return
             
         # Get bridge to handle system prompt modification
-        from .bridge import PersonalityBridge
+from IrintAI Assistant.plugins.personality_plugin.bridge import PersonalityBridge
         bridge = PersonalityBridge(self._chat_panel.parent)
         bridge.ensure_compatibility()
         
@@ -462,7 +526,7 @@ class IrintaiPlugin:
                 return None
                 
             # Apply style transformation
-            from .core.helpers import apply_style_transforms
+from IrintAI Assistant.plugins.personality_plugin.core.helpers import apply_style_transforms
             return apply_style_transforms(content, active_profile)
                 
         except Exception as e:

@@ -8,10 +8,11 @@ This guide provides comprehensive instructions for using the Irintai Assistant a
 2. [Chat Interface](#chat-interface)
 3. [Model Management](#model-management)
 4. [Memory System](#memory-system)
-5. [Configuration](#configuration)
-6. [Dashboard](#dashboard)
-7. [Advanced Features](#advanced-features)
-8. [Tips and Best Practices](#tips-and-best-practices)
+5. [Plugin System](#plugin-system)
+6. [Configuration](#configuration)
+7. [Dashboard](#dashboard)
+8. [Advanced Features](#advanced-features)
+9. [Tips and Best Practices](#tips-and-best-practices)
 
 ## Getting Started
 
@@ -122,6 +123,70 @@ The Memory system allows the AI to reference loaded documents. Available modes:
 - Click "Remove from Index" to delete it from memory
 - Use "Clear Index" to remove all documents
 
+## Plugin System
+
+Irintai's plugin system allows you to extend the assistant's functionality with custom modules.
+
+### Accessing Plugins
+
+1. Click on the "Plugins" tab in the main interface
+2. The plugin panel contains four tabs:
+   - **Local Plugins**: Manage installed plugins
+   - **Plugin Marketplace**: Browse and install new plugins
+   - **Plugin Sandbox**: Test plugins in an isolated environment
+   - **Plugin Settings**: Configure installed plugins
+
+### Managing Local Plugins
+
+1. In the "Local Plugins" tab:
+   - View all installed plugins with their status (Active, Loaded, Not Loaded)
+   - Select a plugin to see its details
+   - Use the action buttons to Load, Activate, Deactivate, or Reload plugins
+   
+2. Plugin actions:
+   - **Load**: Import the plugin code but don't activate it
+   - **Activate**: Enable the plugin's functionality
+   - **Deactivate**: Disable the plugin temporarily
+   - **Reload**: Refresh the plugin code (useful during development)
+
+### Installing New Plugins
+
+1. From the "Plugin Marketplace" tab:
+   - Browse available plugins by category
+   - Search for specific plugins
+   - Select a plugin to view its details
+   
+2. To install a plugin:
+   - Select the plugin in the marketplace
+   - Click "Install Plugin"
+   - Wait for the installation to complete
+   - The plugin will appear in your Local Plugins tab
+
+### Plugin Configuration
+
+1. To configure a plugin:
+   - Select the plugin in the Local Plugins tab
+   - Click on the "Plugin Settings" tab
+   - Adjust the settings specific to that plugin
+   - Click "Save Configuration" to apply changes
+
+### Built-in Plugins
+
+Irintai comes with several built-in plugins:
+
+- **Ollama Hub**: Provides integration with the Ollama model repository
+- **Model Training Performance**: Monitors and optimizes model performance
+- **Network Monitoring**: Tracks network usage and connectivity
+- **Personality Plugin**: Allows customization of the assistant's personality
+
+### Creating Your Own Plugins
+
+For developers interested in creating custom plugins:
+
+1. Refer to our [Plugin API Documentation](plugin_api.md)
+2. Use the Plugin SDK available in the Irintai codebase
+3. Follow our [Plugin Integration Guide](Plugin_integration.md) for best practices
+
 ## Configuration
 
 ### General Settings
@@ -222,7 +287,8 @@ Irintai Assistant includes powerful diagnostic tools to help identify and resolv
 
    Run the basic diagnostic check to verify your installation and configuration:
    ```powershell
-   python diagnostics.py
+   cd "D:\AI\IrintAI Assistant"
+   python diagnostics\enhanced_diagnostics.py --basic
    ```
    
    This checks:
@@ -234,7 +300,8 @@ Irintai Assistant includes powerful diagnostic tools to help identify and resolv
 
    For a comprehensive system check, use:
    ```powershell
-   python enhanced_diagnostics.py
+   cd "D:\AI\IrintAI Assistant"
+   python diagnostics\enhanced_diagnostics.py
    ```
    
    This performs advanced checks:
@@ -246,26 +313,37 @@ Irintai Assistant includes powerful diagnostic tools to help identify and resolv
    
    The enhanced diagnostics will generate a report (`irintai_diagnostic_report.txt`) with recommendations.
 
-3. **Auto-Repair Tools**
+3. **Ollama Diagnostics**
 
-   To automatically fix common plugin issues:
+   For Ollama-specific issues, use:
    ```powershell
-   python fix_plugin_manager.py
+   cd "D:\AI\IrintAI Assistant"
+   python diagnostics\ollama_panel_diagnostic.py
    ```
    
-   This repairs common plugin manager problems like missing methods.
+   This utility helps troubleshoot Ollama connection and configuration issues.
 
 ### Handling Plugin Errors
 
 If you encounter issues with specific plugins:
 
 1. Navigate to the **Plugins** tab
-2. Right-click on the problematic plugin
-3. Select **View Log** to see plugin-specific error messages
-4. Use **Reload Plugin** to attempt to fix loading issues
-5. If problems persist, use **Deactivate Plugin** to disable it
+2. Select the problematic plugin in the list
+3. Check the status and error messages displayed in the information section
+4. Click **Reload** to attempt to fix loading issues
+5. If problems persist, click **Deactivate** to disable the plugin
 
-For persistent issues, run the enhanced diagnostic tool to identify the root cause.
+Common plugin issues and solutions:
+
+- **Plugin fails to load**: Check that all dependencies are installed
+- **Plugin UI not visible**: Try reloading the plugin or restart the application
+- **Plugin freezes the UI**: The plugin might be attempting UI updates from a background thread
+
+For persistent issues:
+1. Run the enhanced diagnostic tool to identify the root cause
+2. Check the application logs in the `data/logs/` directory
+3. Look for plugin-specific errors in the log files
+4. Consider disabling problematic plugins using `python diagnostics\enhanced_diagnostics.py --disable-plugin plugin_name`
 
 ## Tips and Best Practices
 

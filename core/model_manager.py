@@ -8,6 +8,25 @@ import threading
 import re
 import time
 from typing import Dict, List, Optional, Callable, Tuple, Any
+import shutil   # Add this if not already imported
+
+# ------------------------------------------------------------------------------
+# At module top you should have something like:
+#
+# RECOMMENDED_MODELS = {
+#     "llama2": { "context": "4K" },
+#     "gpt4all": { "context": "8K" },
+#     ...
+# }
+# MODEL_STATUS = {
+#     "INSTALLED": "installed",
+#     "NOT_INSTALLED": "not_installed",
+#     "OUT_OF_DATE": "out_of_date"
+# }
+# ------------------------------------------------------------------------------
+
+# Regular expression to match ANSI escape sequences
+ANSI_ESCAPE_PATTERN = re.compile(r'(\x1B\[[0-?]*[ -/]*[@-~]|\x1B[@-_]|[\x00-\x08\x0B-\x1F\x7F])')
 
 # Model status constants
 MODEL_STATUS = {
@@ -44,7 +63,7 @@ class ModelManager:
             logger: Logging function
             use_8bit: Whether to use 8-bit quantization
             config: Optional configuration manager
-        """
+        """        
         self.model_path = model_path
         self.log = logger
         self.use_8bit = use_8bit
@@ -53,11 +72,28 @@ class ModelManager:
         self.current_model = None
         self.model_process = None
         self.on_status_changed = None  # Callback for status changes
+        self.current_parameters = {}  # Store current model parameters
+        # Default context size (can be overridden by config)
+        self.context_size = config.get("model.context_size", 4096) if config else 4096
         
         # Initialize environment
         self._update_environment()
         # Populate available models dynamically
         self.available_models = [{'name': model} for model in self.detect_models()]
+        
+    def _strip_ansi_codes(self, text: str) -> str:
+        """
+        Remove ANSI escape sequences from text
+        
+        Args:
+            text: Input text that may contain ANSI escape sequences
+            
+        Returns:
+            Clean text with escape sequences removed
+        """
+        if not text:
+            return ""
+        return ANSI_ESCAPE_PATTERN.sub('', text)
         
     def _update_environment(self) -> None:
         """Update environment variables for model path"""
@@ -117,11 +153,18 @@ class ModelManager:
     def detect_models(self) -> List[str]:
         """
         Detect installed models
-        
         Returns:
             List of installed model names
         """
         self.log("[Checking] Looking for installed models...")
+        # Early exit if Ollama is not installed or not in PATH
+        if shutil.which("ollama") is None:
+            self.log("[Error] Ollama executable not found. Please install Ollama and ensure it is in your PATH.")
+            # Mark all recommended models as not installed
+            for model in RECOMMENDED_MODELS:
+                self.model_statuses[model] = MODEL_STATUS["NOT_INSTALLED"]
+            return []
+
         available_models = []
         
         # Retry mechanism
@@ -134,10 +177,12 @@ class ModelManager:
                 # Call ollama list with proper environment
                 env = os.environ.copy()
                 result = subprocess.run(
-                    ["ollama", "list"], 
-                    capture_output=True, 
-                    text=True, 
-                    timeout=10, 
+                    ["ollama", "list"],
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    timeout=10,
                     env=env
                 )
                 
@@ -177,21 +222,35 @@ class ModelManager:
     
     def fetch_available_models(self) -> List[Dict]:
         """
-        Fetch available models from Ollama repository
-        
+        Fetch remote model list from Ollama
         Returns:
-            List of model dictionaries with metadata
+            List of model dicts with metadata
         """
         self.log("[Fetching] Getting model list from Ollama repository...")
-        models_list = []
-        
+        # Initialize list to collect models
+        models_list: List[Dict] = []
+        # Early exit if Ollama is not installed or not in PATH
+        if shutil.which("ollama") is None:
+            self.log("[Error] Ollama executable not found. Please install Ollama and ensure it is in your PATH.")
+            # Return only recommended models
+            for name, meta in RECOMMENDED_MODELS.items():
+                models_list.append({
+                    "name": name,
+                    "size": meta.get("context", "Unknown"),
+                    "installed": False,
+                    "recommended": True
+                })
+            return models_list
+
         try:
             # First get locally installed models
             try:
                 result = subprocess.run(
-                    ["ollama", "list"], 
-                    capture_output=True, 
-                    text=True, 
+                    ["ollama", "list"],
+                    capture_output=True,
+                    text=True,
+                    encoding='utf-8',
+                    errors='replace',
                     timeout=5,
                     env=os.environ.copy()
                 )
@@ -213,35 +272,48 @@ class ModelManager:
                     self.log(f"[Error] ollama list command failed: {result.stderr}")
             except Exception as e:
                 self.log(f"[Error] Failed to get installed models: {e}")
-            
-            # Check Ollama version to determine the correct command
+              # Try to get Ollama version using "--version" flag (for Ollama 0.6.5+)
             supports_all_flag = False
-            version_text = "Unknown"  # Default value to prevent reference errors
+            version_text = "0.6.5"  # Default to your known version
             
             try:
+                # First try the newer "--version" flag (Ollama 0.6.5+)
                 version_result = subprocess.run(
-                    ["ollama", "version"],
+                    ["ollama", "--version"],
                     capture_output=True,
                     text=True,
+                    encoding='utf-8',
+                    errors='replace',
                     timeout=5
                 )
                 
-                if version_result.returncode == 0:
+                if version_result.returncode == 0 and version_result.stdout.strip():
                     version_text = version_result.stdout.strip()
+                    self.log(f"[Ollama Version] {version_text} (using --version flag)")
+                    supports_all_flag = True
+                else:
+                    # Fall back to "version" command (some versions)
+                    version_result = subprocess.run(
+                        ["ollama", "version"],
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace',
+                        timeout=5
+                    )
                     
-                    # Check if version likely supports "--all" flag
-                    if any(f"{i}." in version_text for i in range(0, 20)):
-                        # Most versions should support 'list --all' or 'list remote'
+                    if version_result.returncode == 0:
+                        version_text = version_result.stdout.strip()
+                        self.log(f"[Ollama Version] {version_text} (using version command)")
                         supports_all_flag = True
-                
-                self.log(f"[Ollama Version] {version_text} (Supports --all: {supports_all_flag})")
+                    else:
+                        self.log(f"[Ollama Version] Assuming version 0.6.5 (version check failed)")
             except Exception as e:
                 self.log(f"[Warning] Could not determine Ollama version: {e}")
             
-            # Try both commands in case one fails
+            # Use commands appropriate for Ollama 0.6.5+
             commands_to_try = [
-                ["ollama", "list", "--all"],
-                ["ollama", "list", "remote"]
+                ["ollama", "list", "remote"]  # This works in 0.6.5
             ]
             
             success = False
@@ -253,9 +325,11 @@ class ModelManager:
                 try:
                     self.log(f"[Fetching] Trying: {' '.join(cmd)}")
                     repo_result = subprocess.run(
-                        cmd, 
-                        capture_output=True, 
-                        text=True, 
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        encoding='utf-8',
+                        errors='replace',
                         timeout=10,
                         env=os.environ.copy()
                     )
@@ -389,13 +463,95 @@ class ModelManager:
         
         # Update model status
         self._update_model_status(model, MODEL_STATUS["UNINSTALLING"])
+    
+# Define a proper send_prompt implementation
+    def send_prompt(self, prompt: str, formatter: Callable = None) -> Tuple[bool, str]:
+        """
+        Send a prompt to the model and get a response
+        Compatible with Ollama 0.6.5
         
-        # Start a thread for uninstallation
-        threading.Thread(
-            target=self._uninstall_model_thread,
-            args=(model,),
-            daemon=True
-        ).start()
+        Args:
+            prompt: The prompt to send to the model
+            formatter: Optional function to format the prompt
+            
+        Returns:
+            Tuple of (success, response)
+        """
+        try:
+            # Check if we have a current model and if it's running
+            if not self.current_model:
+                self.log("[Error] No model is selected")
+                return False, "No model is selected. Please start a model first."
+            
+            if not self.model_process or self.model_process.poll() is not None:
+                self.log("[Error] Model is not running")
+                return False, "Model is not running. Please start a model first."
+            
+            # Format prompt if formatter is provided
+            formatted_prompt = formatter(prompt) if formatter else prompt
+            
+            # Update status
+            self._update_model_status(self.current_model, "Generating...")
+            
+            # Log that we're sending the prompt
+            self.log(f"[Prompt] Sending prompt to model ({len(formatted_prompt)} chars)")
+            
+            # This is the key fix: communicate directly with the running model process
+            try:
+                # Write prompt to stdin and flush
+                self.model_process.stdin.write(formatted_prompt + "\n")
+                self.model_process.stdin.flush()
+                
+                # Capture response - Ollama will output the response followed by a prompt marker
+                response = ""
+                waiting_for_response = True
+                timeout = time.time() + 60  # 60 second timeout
+                
+                # Read output until we get a response
+                while waiting_for_response and time.time() < timeout:
+                    # Check if process is still alive
+                    if self.model_process.poll() is not None:
+                        self.log("[Error] Model process terminated while generating response")
+                        return False, "Model process terminated unexpectedly"
+                        
+                    # Try to read a line of output
+                    line = self.model_process.stdout.readline()
+                    if not line:  # No output available yet
+                        time.sleep(0.1)
+                        continue
+                        
+                    line = line.strip()
+                    if not line:  # Empty line
+                        continue
+                        
+                    # If the line contains the prompt marker, we're done
+                    if ">" in line or "▌" in line:
+                        waiting_for_response = False
+                        break
+                        
+                    # Otherwise, add the line to our response
+                    response += line + "\n"
+                    
+                # Check for timeout
+                if waiting_for_response:
+                    self.log("[Error] Timed out waiting for response")
+                    return False, "Timed out waiting for model response"
+                    
+                # Update status back to running
+                self._update_model_status(self.current_model, "Running")
+                
+                # Log success
+                self.log(f"[Generate] Successfully received response ({len(response)} chars)")
+                
+                return True, response.strip()
+                
+            except BrokenPipeError:
+                self.log("[Error] Connection to model lost (broken pipe)")
+                return False, "Connection to model process lost. Please restart the model."
+                
+        except Exception as e:
+            self.log(f"[Error] Failed to generate response: {e}")
+            return False, f"Error: {str(e)}"
     
     def _uninstall_model_thread(self, model: str) -> None:
         """
@@ -407,6 +563,11 @@ class ModelManager:
         try:
             # Use subprocess to run ollama rm
             env = os.environ.copy()
+            env["PYTHONIOENCODING"] = "utf-8"
+            threading.Thread(
+            target=self._uninstall_model_thread,
+            args=(model,),
+            daemon=True).start()
             
             # Run the command with real-time output
             process = subprocess.Popen(
@@ -458,9 +619,11 @@ class ModelManager:
             
             # If not in filesystem, try checking via ollama list
             result = subprocess.run(
-                ["ollama", "list"], 
-                capture_output=True, 
-                text=True, 
+                ["ollama", "list"],
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
                 timeout=5,
                 env=os.environ.copy()
             )
@@ -511,15 +674,25 @@ class ModelManager:
         self.current_model = model_name
         
         self.log(f"[Starting Model] {model_name}{' (8-bit mode)' if self.use_8bit else ''}")
-        
         try:
             # Build the command
             cmd = ["ollama", "run", model_name]
-            
-            # Apply model-specific configurations if provided
+              # Apply model-specific configurations if provided
             if model_config:
+                # Check for valid Ollama run parameters and filter out any invalid ones
+                valid_ollama_params = ["temperature", "context", "threads", "gpu", "seed"]
+                
+                # First log all parameters for debugging
+                self.log(f"[Model Config] Received parameters: {list(model_config.keys())}")
+                
+                # Only use parameters that are valid for Ollama command line
                 for key, value in model_config.items():
-                    cmd.extend([f"--{key}", str(value)])
+                    if key in valid_ollama_params:
+                        # Add valid parameter to command
+                        cmd.extend([f"--{key}", str(value)])
+                        self.log(f"[Model Config] Using parameter: {key}={value}")
+                    else:
+                        self.log(f"[Warning] Skipping unsupported Ollama parameter: {key}")
 
             # Check if 8-bit mode is requested and handle it safely
             if self.use_8bit:
@@ -530,6 +703,8 @@ class ModelManager:
                         ["ollama", "version"],
                         capture_output=True,
                         text=True,
+                        encoding='utf-8',
+                        errors='replace',
                         timeout=5
                     )
                     
@@ -594,25 +769,94 @@ class ModelManager:
             # Notify callback if provided
             if callback:
                 callback("started", model_name)
+              # Process output in real-time
+            # Keep a local reference to avoid NoneType errors if model_process is cleared by another thread
+            local_process = self.model_process
             
-            # Process output in real-time
-            for line in iter(self.model_process.stdout.readline, ''):
-                if line.strip():
-                    # Log the output
-                    self.log(line.strip())
-                    
-                    # Notify callback if provided
-                    if callback:
-                        callback("output", line.strip())
+            try:                
+                for line in iter(local_process.stdout.readline, ''):
+                    # Check if the process was terminated
+                    if local_process.poll() is not None:
+                        self.log("[Info] Process terminated while reading output")
+                        break
+                        
+                    if line.strip():
+                        # Clean ANSI escape sequences from output
+                        clean_line = self._strip_ansi_codes(line.strip())
+                        
+                        # Log the clean output
+                        self.log(clean_line)
+                        
+                        # Notify callback if provided
+                        if callback:
+                            callback("output", clean_line)
+            except Exception as read_error:
+                self.log(f"[Warning] Error while reading process output: {read_error}")
             
-            # When the process exits
-            self.log("[Model Stopped]")
-            self._update_model_status(model_name, MODEL_STATUS["INSTALLED"])
+            # Check if the process exited unexpectedly (exit code != 0)
+            exit_code = local_process.poll()
+            if exit_code is not None and exit_code != 0:
+                self.log(f"[Warning] Model process exited unexpectedly with code {exit_code}. Attempting restart.")
+            
+            # Clear the current process reference
             self.model_process = None
             
-            # Notify callback if provided
-            if callback:
-                callback("stopped", model_name)
+            # Attempt to restart up to 3 times
+            for attempt in range(1, 4):
+                self.log(f"[Auto-Recovery] Attempt {attempt} to restart model {model_name}")
+                time.sleep(2)  # Give some time before restarting
+                
+                try:
+                    # Create a new process
+                    self.model_process = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        env=env
+                    )
+                    
+                    # Update status
+                    self._update_model_status(model_name, MODEL_STATUS["RUNNING"])
+                    
+                    if callback:
+                        callback("restarted", model_name)
+                        
+                    # Process output from the restarted model
+                    for line in iter(self.model_process.stdout.readline, ''):
+                        if line.strip():
+                            # Log the output
+                            self.log(line.strip())
+                            
+                            # Notify callback if provided
+                            if callback:
+                                callback("output", line.strip())
+                                
+                    # If we get here, the model has stopped again
+                    break
+                    
+                except Exception as restart_error:
+                    self.log(f"[Error] Restart attempt {attempt} failed: {restart_error}")
+                    
+                    if attempt == 3:
+                        self.log("[Error] Maximum restart attempts reached. Model service appears unstable.")
+                        # Update the status to error after all attempts fail
+                        self._update_model_status(model_name, MODEL_STATUS["ERROR"])
+                        
+                        # Notify callback if provided
+                        if callback:
+                            callback("error", "Model service appears unstable after multiple restart attempts")
+            else:
+                # Normal exit scenario
+                self.log("[Model Stopped]")
+                self._update_model_status(model_name, MODEL_STATUS["INSTALLED"])
+                self.model_process = None
+                
+                # Notify callback if provided
+                if callback:
+                    callback("stopped", model_name)
             
         except Exception as e:
             # Handle errors
@@ -622,8 +866,8 @@ class ModelManager:
             
             # Notify callback if provided
             if callback:
-                callback("error", str(e))
-                
+                callback("error", str(e))    
+    
     def stop_model(self) -> bool:
         """
         Stop the running model process
@@ -631,33 +875,52 @@ class ModelManager:
         Returns:
             True if model stopped successfully, False otherwise
         """
-        if not self.model_process or self.model_process.poll() is not None:
+        # First check if there's any model running
+        if not self.model_process:
             self.log("[Warning] No model is currently running")
             return False
+            
+        # Store local references to avoid race conditions
+        model_process = self.model_process
+        current_model = self.current_model
         
-        model_name = self.current_model
+        # Clear the reference immediately to prevent double-stop attempts
+        self.model_process = None
         
         try:
+            # Check if process is still running
+            if model_process.poll() is not None:
+                self.log("[Warning] Model process has already exited")
+                if current_model:
+                    self._update_model_status(current_model, MODEL_STATUS["INSTALLED"])
+                return True
+            
             # Give the process a chance to close gracefully
             self.log("[Stopping Model] Sending termination signal...")
-            self.model_process.terminate()
+            model_process.terminate()
             
             # Update status
-            self._update_model_status(model_name, MODEL_STATUS["INSTALLED"])
+            if current_model:
+                self._update_model_status(current_model, MODEL_STATUS["INSTALLED"])
             
             # Wait for up to 5 seconds for clean shutdown
             start_time = time.time()
-            while self.model_process.poll() is None and time.time() - start_time < 5:
+            while model_process.poll() is None and time.time() - start_time < 5:
                 time.sleep(0.1)
             
             # If still running, force kill
-            if self.model_process.poll() is None:
+            if model_process.poll() is None:
                 self.log("[Stopping Model] Force killing process...")
-                self.model_process.kill()
-            
-            self.model_process = None
-            self.log(f"[Stopped Model] {model_name}")
-            
+                try:
+                    model_process.kill()
+                except Exception as kill_error:
+                    self.log(f"[Warning] Error during force kill: {kill_error}")
+                    
+            if current_model:
+                self.log(f"[Stopped Model] {current_model}")
+            else:
+                self.log("[Stopped Model] Unknown model")
+                
             return True
             
         except Exception as e:
@@ -677,8 +940,13 @@ class ModelManager:
             Tuple containing success flag and response text
         """
         if not self.model_process or self.model_process.poll() is not None:
-            self.log("[Error] Model is not running")
-            return False, "Model is not running"
+            if self.model_process is not None:
+                exit_code = self.model_process.poll()
+                self.log(f"[Warning] Model process exited with code {exit_code} before sending prompt")
+            else:
+                self.log("[Warning] Model is not running. Please start a model first.")
+            # Notify caller to start the model
+            return False, "Model is not running. Please start a model first."
         
         # Update status to generating
         model_name = self.current_model
@@ -691,9 +959,18 @@ class ModelManager:
             # Format the input properly
             input_text = formatted + "\n"
             
+            # Log start of interaction
+            self.log(f"[Prompt] Sending prompt to {model_name} (length: {len(input_text)})")
+            
             # Write to stdin and flush immediately
             self.model_process.stdin.write(input_text)
             self.model_process.stdin.flush()
+            
+            # Check if process is still alive after sending prompt
+            if self.model_process.poll() is not None:
+                exit_code = self.model_process.poll()
+                self.log(f"[Warning] Model process terminated with code {exit_code} right after sending prompt")
+                return False, f"Model process terminated (exit code: {exit_code})"
             
             # Collect the response
             response = ""
@@ -703,6 +980,8 @@ class ModelManager:
             while time.time() - start_time < timeout:
                 # Check if the process is still running
                 if self.model_process.poll() is not None:
+                    exit_code = self.model_process.poll()
+                    self.log(f"[Warning] Model process terminated with code {exit_code} during response generation")
                     break
                 
                 # Read available output
@@ -720,8 +999,13 @@ class ModelManager:
                 
                 # If we detect the model is waiting for the next input
                 if "> " in line or "▌" in line:
+                    self.log("[Prompt] Detected model completion marker")
                     break
             
+            # Check for timeout
+            if time.time() - start_time >= timeout:
+                self.log(f"[Warning] Response generation timed out after {timeout} seconds")
+                
             # Update status when done generating
             self._update_model_status(model_name, MODEL_STATUS["RUNNING"])
             
@@ -1092,3 +1376,67 @@ class ModelManager:
         # Model not found
         self.logger(f"[ModelManager] Model config not found for: {model_name}")
         return None
+    
+    def list_models(self, remote=False):
+        """
+        List installed Ollama models or remote models
+        
+        Args:
+            remote: Whether to list remote models (True) or local models (False)
+            
+        Returns:
+            Tuple of (success, data) where data is a dict with models list or error
+        """
+        self.log(f"[Models] Listing {'remote' if remote else 'local'} Ollama models")
+        
+        try:
+            # Check if Ollama is installed
+            if shutil.which("ollama") is None:
+                return False, {"error": "Ollama executable not found"}
+                
+            # Command to list models
+            cmd = ["ollama", "list"]
+            if remote:
+                cmd.append("remote")
+                
+            # Run the command
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                timeout=10,
+                env=os.environ.copy()
+            )
+            
+            if result.returncode != 0:
+                return False, {"error": f"Command failed: {result.stderr}"}
+                
+            # Parse the output to extract model names
+            output = self._strip_ansi_codes(result.stdout)
+            lines = output.strip().split('\n')
+            models = []
+            
+            # Skip header line if present
+            start_idx = 1 if len(lines) > 0 and ('NAME' in lines[0] or 'MODEL' in lines[0]) else 0
+            
+            # Parse each line to extract model info
+            for line in lines[start_idx:]:
+                if line.strip():
+                    # First column is name, try to extract tags too
+                    parts = line.split()
+                    if not parts:
+                        continue
+                        
+                    name = parts[0]
+                    models.append({
+                        "name": name,
+                        "status": "installed" if not remote else "available",
+                    })
+            
+            return True, {"models": models}
+            
+        except Exception as e:
+            self.log(f"[Error] Failed to list models: {e}")
+            return False, {"error": str(e)}

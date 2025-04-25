@@ -1,0 +1,69 @@
+{
+    "model": {
+        "provider": "ollama",
+        "name": "llama3:8b",
+        "api_key": "",
+        "use_8bit": true,
+        "top_p": 0.9,
+        "temperature": 0.7,
+        "max_tokens": 2048,
+        "context_window": 4096
+    },
+    "ui": {
+        "theme": "System",
+        "font_size": 12,
+        "window_size": "1024x768",
+        "show_debug_messages": false,
+        "start_minimized": false,
+        "confirm_exit": true
+    },
+    "plugins": {
+        "enabled": [],
+        "plugin_directory": "plugins",
+        "settings": {}
+    },
+    "memory": {
+        "enabled": true,
+        "storage_type": "vector",
+        "max_history": 100,
+        "embedding_model": "all-mpnet-base-v2",
+        "relevance_threshold": 0.7,
+        "default_result_count": 5,
+        "index_path": "data/vector_store/vector_store.json"
+    },
+    "logging": {
+        "log_level": "INFO",
+        "log_directory": "data/logs",
+        "max_log_size_mb": 10,
+        "keep_backup_logs": true
+    },
+    "ollama": {
+        "url": "http://localhost:11434",
+        "model_path": "path/to/your/models"
+    },
+    "system": {
+        "system_message": "You are Irintai, a helpful and knowledgeable assistant.",
+        "system_prompt": "You are a helpful, creative, and knowledgeable assistant.",
+        "inference_mode": "GPU",
+        "memory_mode": "Auto",
+        "check_updates": true,
+        "nsfw_enabled": false
+    },
+    "huggingface": {
+        "api_key": "YOUR_HUGGINGFACE_API_KEY",
+        "api_url": "https://huggingface.co/api"
+    },
+    "network": {
+        "api_endpoints": {
+            "ollama_api": "http://localhost:11434/api/version",
+            "github_api": "https://api.github.com",
+            "huggingface_api": "https://huggingface.co/api/models"
+        },
+        "proxy": {},
+        "timeouts": {
+            "connect": 5,
+            "read": 10
+        }
+    },
+    "memory_mode": "Manual"
+}

@@ -10,18 +10,30 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+wheels/
+share/python-wheels/
+MANIFEST
 
 # Virtual environments
 venv/
 env/
 ENV/
 .env/
+.venv/
+pythonenv*
 
 # IDE specific files
 .idea/
 .vscode/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
+.spyderproject
+.spyproject
+.ropeproject
+.project
+.pydevproject
 
 # Logs and databases
 data/logs/
@@ -44,14 +56,21 @@ data/reflections/*
 
 # Config files containing sensitive information
 data/config.json
+*.jsonbackup
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*/.ipynb_checkpoints/*
 
 # Testing
 .coverage
 htmlcov/
 .pytest_cache/
+coverage.xml
+*.cover
+.hypothesis/
+.tox/
+nosetests.xml
 
 # OS specific files
 .DS_Store
@@ -77,3 +96,30 @@ data/plugins/data/*
 
 # Runtime patching backup files
 *.patch.bak
+
+# Environment variable files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# AI model checkpoint files
+*.ckpt
+*.pt
+*.pth
+*.h5
+*.model
+*.bin
+*.onnx
+*.safetensors
+data/embeddings/
+
+# Generated chat completions and intermediate data
+data/generated/
+data/intermediate/
+data/embeddings/
+
+# Profile outputs
+prof/
+*.prof

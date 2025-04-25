@@ -98,7 +98,7 @@ class SystemMonitor:
                 self._update_custom_metrics()
                 
                 # Emit system stats event
-                if self.event_bus:
+                if self.event_bus is not None:
                     self.event_bus.publish("system.stats_updated", system_stats)
                     
             except Exception as e:
@@ -502,7 +502,7 @@ class SystemMonitor:
                                        last_value > critical_threshold >= value))
                     
                     # Emit event if significant change
-                    if (significant_change or crossed_warning or crossed_critical) and self.event_bus:
+                    if (significant_change or crossed_warning or crossed_critical) and self.event_bus is not None:
                         event_data = {
                             "plugin_id": metric["plugin_id"],
                             "metric_id": metric["metric_id"],
@@ -516,13 +516,13 @@ class SystemMonitor:
                         self.event_bus.publish("system.metric_changed", event_data)
                         
                         # Also emit specific events for threshold crossings
-                        if crossed_warning:
+                        if crossed_warning and self.event_bus is not None:
                             if value > warning_threshold:
                                 self.event_bus.publish("system.metric_warning", event_data)
                             else:
                                 self.event_bus.publish("system.metric_warning_resolved", event_data)
                                 
-                        if crossed_critical:
+                        if crossed_critical and self.event_bus is not None:
                             if value > critical_threshold:
                                 self.event_bus.publish("system.metric_critical", event_data)
                             else:
@@ -564,7 +564,7 @@ class SystemMonitor:
             # Check for significant change (5% or more)
             if abs(value - prev_value) >= 5:
                 # Emit event if event bus is available
-                if self.event_bus:
+                if self.event_bus is not None:
                     event_data = {
                         "metric": key,
                         "value": value,
@@ -812,7 +812,7 @@ class SystemMonitor:
                     self.unregister_process_monitor(plugin_id, process_id)
                     
                     # Emit event if event bus is available
-                    if self.event_bus:
+                    if self.event_bus is not None:
                         event_data = {
                             "plugin_id": plugin_id,
                             "process_id": process_id,

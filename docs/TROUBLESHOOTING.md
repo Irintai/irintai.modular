@@ -1,4 +1,3 @@
-<!-- filepath: d:\AI\IrintAI Assistant\docs\TROUBLESHOOTING.md -->
 # Irintai Assistant Troubleshooting Guide
 
 This guide provides comprehensive information about diagnosing and fixing issues with your Irintai Assistant installation.
@@ -13,7 +12,7 @@ Run this tool to perform a basic system check:
 
 ```powershell
 cd "D:\AI\IrintAI Assistant"
-python diagnostics.py
+python diagnostics\enhanced_diagnostics.py --basic
 ```
 
 This will check for:
@@ -21,6 +20,7 @@ This will check for:
 - Configuration file validity
 - Plugin structure
 - Basic file structure integrity
+- Python environment compatibility
 
 ### Enhanced Diagnostics
 
@@ -28,7 +28,7 @@ For a more comprehensive analysis, use the enhanced diagnostics tool:
 
 ```powershell
 cd "D:\AI\IrintAI Assistant"
-python enhanced_diagnostics.py
+python diagnostics\enhanced_diagnostics.py
 ```
 
 This advanced tool performs thorough checks including:
@@ -48,7 +48,7 @@ The following tools can automatically fix common issues:
 
 1. **Plugin Manager Repair**:
    ```powershell
-   python fix_plugin_manager.py
+   python diagnostics\fix_plugin_manager.py
    ```
    Fixes missing methods in the plugin manager, particularly the `set_error_handler` method.
 
@@ -62,20 +62,40 @@ The following tools can automatically fix common issues:
 **Symptoms**: Application immediately crashes or shows an error dialog
 
 **Potential Solutions**:
-1. Run enhanced diagnostics to identify the root cause
-2. Check for missing plugin methods with `python enhanced_diagnostics.py`
-3. Run `python fix_plugin_manager.py` to repair common plugin manager issues
-4. Verify your Python version is 3.8 or higher
+1. Run enhanced diagnostics to identify the root cause: 
+   ```powershell
+   python diagnostics\enhanced_diagnostics.py
+   ```
+2. Check for missing plugin methods and other issues in the generated diagnostic report
+3. Run the plugin manager repair tool:
+   ```powershell
+   python diagnostics\fix_plugin_manager.py
+   ```
+4. Verify your Python version is 3.10 or higher (3.8 minimum, but 3.10+ recommended)
+5. Check Python environment dependencies:
+   ```powershell
+   pip install -r docs\requirements.txt
+   ```
 
 ### Plugin Loading Failures
 
 **Symptoms**: Plugins fail to load or show error messages in the logs
 
 **Potential Solutions**:
-1. Check the plugin structure with `python enhanced_diagnostics.py`
+1. Check the plugin structure with:
+   ```powershell
+   python diagnostics\enhanced_diagnostics.py --plugins-only
+   ```
 2. Verify that each plugin directory has a valid `manifest.json` file
-3. Confirm all plugin dependencies are installed
-4. Check the logs for specific error messages
+3. Confirm all plugin dependencies are installed:
+   ```powershell
+   python diagnostics\plugin_dependency_checker.py plugin_name
+   ```
+4. Check the logs in `data/logs/` for specific error messages
+5. Try to reload the plugin from the Plugin Panel interface:
+   - Go to the "Plugins" tab
+   - Select the problematic plugin
+   - Click "Reload"
 
 ### Threading Errors
 
@@ -85,6 +105,18 @@ The following tools can automatically fix common issues:
 1. These errors typically occur when background threads try to update the UI after the main application has closed
 2. The runtime patching system should handle most of these automatically
 3. For custom plugins, ensure thread safety by checking if UI elements still exist before updating them
+4. Use the `root.after()` method to schedule UI updates from background threads:
+   ```python
+   # Instead of directly updating a widget from a thread
+   # widget.config(text="New text")  # Wrong!
+   
+   # Do this instead
+   root.after(0, lambda: widget.config(text="New text"))  # Correct!
+   ```
+5. Check if errors persist after running:
+   ```powershell
+   python diagnostics\enhanced_diagnostics.py --fix-threading
+   ```
 
 ### Memory System Issues
 

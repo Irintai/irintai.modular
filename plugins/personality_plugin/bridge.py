@@ -438,7 +438,7 @@ class PersonalityBridge:
                     return content
                     
                 # Apply style transformations from helpers
-                from .core.helpers import apply_style_transforms
+from IrintAI Assistant.plugins.personality_plugin.core.helpers import apply_style_transforms
                 return apply_style_transforms(content, active_profile)
                     
             except Exception as e:

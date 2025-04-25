@@ -8,7 +8,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from typing import Dict, List, Any, Optional
 
 # Import the core plugin
-from ..core.personality_plugin import PersonalityPlugin
+from IrintAI Assistant.plugins.personality_plugin.core.personality_plugin import PersonalityPlugin
 
 class Panel:
     """UI panel for the Personality Plugin"""
@@ -438,7 +438,7 @@ class Panel:
             # Create profile
             if template == "Empty":
                 # Create empty profile
-                from ..core import create_empty_profile
+from IrintAI Assistant.plugins.personality_plugin.core import create_empty_profile
                 profile_data = create_empty_profile(name)
                 profile_data["description"] = description
             else:
@@ -446,7 +446,7 @@ class Panel:
                 template_profile = self.plugin.get_profile(template) 
                 if not template_profile:
                     # Fallback to empty profile
-                    from ..core import create_empty_profile
+from IrintAI Assistant.plugins.personality_plugin.core import create_empty_profile
                     profile_data = create_empty_profile(name)
                 else:
                     # Clone template

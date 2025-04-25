@@ -1,29 +1,31 @@
-# Core dependencies
-torch>=1.9.0
-sentence-transformers>=2.2.2
-requests>=2.25.1
-psutil>=5.8.0
-importlib>=1.0.4  # For dynamic module loading
-typing_extensions>=4.0.0  # For advanced type hints
+# IrintAI Assistant Dependencies
 
-# UI dependencies
-pillow>=9.0.0
-tkinter>=8.6  # Usually included with Python
+# Core Dependencies
+sentence-transformers>=2.2.2  # For vector embeddings
+torch>=2.0.0                  # Required by sentence-transformers
+numpy>=1.24.0                 # Used for array operations
+psutil>=5.9.0                 # System monitoring
+pyyaml>=6.0                   # Configuration management
 
-# File handling
-python-docx>=0.8.11
-PyPDF2>=2.0.0
-chardet>=4.0.0
-pathlib>=1.0.1  # For path manipulation
+# Document Processing
+python-docx>=0.8.11           # Microsoft Word document support
+PyPDF2>=2.10.0                # PDF document support
+pillow>=9.3.0                 # Image processing for documents with images
 
-# Utilities
-tqdm>=4.61.0
-numpy>=1.20.0
-re>=2.2.1  # For regex pattern matching in diagnostics
-json>=2.0.9  # For config file parsing
-platform>=1.0.8  # For system information gathering
-traceback>=2.0.0  # For detailed error reporting
-logging>=0.5.1.2  # For advanced logging features
+# User Interface
+tkinter                       # Default with Python, included for documentation
+ttkthemes>=3.2.2              # Enhanced UI themes
+matplotlib>=3.6.0             # For visualizations in the Resource Monitor
 
-# Diagnostic tools
-pytest>=7.0.0  # For running tests in diagnostic mode
+# Threading and Concurrency
+# (Standard library)
+
+# Specialized Features
+scikit-learn>=1.2.0           # For ML utilities
+requests>=2.28.1              # For network requests
+python-dotenv>=0.21.0         # Environment variable management
+
+# Diagnostics and Development
+pytest>=7.0.0                 # Testing
+mypy>=1.0.0                   # Type checking
+black>=22.12.0                # Code formatting
