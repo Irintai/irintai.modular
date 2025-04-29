@@ -1,0 +1,102 @@
+graph TD
+    %% Main Application
+    irintai_assistant["IrintAI Assistant\n(irintai.py Main Entry Point)"]
+
+    %% Core Components
+    core[Core Components]
+    chat[ChatEngine]
+    memory[MemorySystem]
+    model[ModelManager]
+    config[ConfigManager]
+    plugin_manager[PluginManager]
+    plugin_sdk[PluginSDK]
+
+    %% UI Components
+    ui[UI Components]
+    main_window[MainWindow]
+    chat_panel[ChatPanel]
+    model_panel[ModelPanel]
+    memory_panel[MemoryPanel]
+    config_panel[ConfigPanel]
+    log_viewer[LogViewer]
+    plugin_panel[PluginPanel]
+    resource_monitor[ResourceMonitorPanel]
+
+    %% Utilities
+    utils[Utility Modules]
+    logger[IrintaiLogger]
+    system_monitor[SystemMonitor]
+    file_ops[FileOps]
+    event_bus[EventBus]
+    dependency_manager[DependencyManager]
+
+    %% Plugins
+    plugins[Plugin System]
+    personality_plugin[Personality Plugin]
+    model_training_plugin[Model Training Plugin]
+    network_monitoring_plugin[Network Monitoring Plugin]
+
+    %% Data Storage
+    data[Data Storage]
+    models[AI Models]
+    logs[Log Files]
+    reflections[Session Reflections]
+    vector_store[Vector Embeddings]
+
+    %% Main Application Connections
+    irintai_assistant --> core
+    irintai_assistant --> ui
+    irintai_assistant --> utils
+
+    %% Core Component Connections
+    core --> chat
+    core --> memory
+    core --> model
+    core --> config
+    core --> plugin_manager
+    core --> plugin_sdk
+
+    %% Core Interactions
+    chat <--> memory
+    chat <--> model
+    model <--> config
+    memory <--> config
+    plugin_manager <--> plugin_sdk
+    plugin_manager <--> config
+
+    %% UI Component Connections
+    ui --> main_window
+    main_window --> chat_panel
+    main_window --> model_panel
+    main_window --> memory_panel
+    main_window --> config_panel
+    main_window --> log_viewer
+    main_window --> plugin_panel
+    main_window --> resource_monitor
+
+    %% UI to Core Interactions
+    chat_panel <--> chat
+    model_panel <--> model
+    memory_panel <--> memory
+    config_panel <--> config
+    log_viewer <--> logger
+    plugin_panel <--> plugin_manager
+    resource_monitor <--> system_monitor
+
+    %% Utility Connections
+    utils --> logger
+    utils --> system_monitor
+    utils --> file_ops
+    utils --> event_bus
+    utils --> dependency_manager
+
+    %% Plugin System
+    plugin_manager --> plugins
+    plugins --> personality_plugin
+    plugins --> model_training_plugin
+    plugins --> network_monitoring_plugin
+
+    %% Plugin SDK Connections
+    plugin_sdk --> personality_plugin
+    plugin_sdk --> model_training_plugin
+    plugin_sdk --> network_monitoring_plugin

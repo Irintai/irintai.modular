@@ -2,21 +2,21 @@
 
 ## Overview
 
-The Irintai Plugin API provides a powerful, containerized framework for developing plugins that can extend the functionality of the Irintai Assistant. This document describes the architecture, available services, and best practices for plugin development.
+The Irintai Plugin API provides a robust, containerized framework for developing plugins that extend the Irintai Assistant. Plugins can add new UI panels, processing features, integrations, and more—while running in a secure, isolated environment.
 
 ## Plugin Architecture
 
-Irintai uses a containerized plugin architecture that provides:
+Irintai uses a modular, containerized plugin architecture with:
 
 1. **Isolation**: Each plugin runs in its own environment with controlled access to system resources
 2. **Resource Monitoring**: Plugins can register custom metrics for performance tracking
-3. **Inter-Plugin Communication**: Plugins can communicate with each other through an event system
-4. **Dependency Management**: Plugins can declare dependencies on other plugins
-5. **Configuration Management**: Plugins can have user-configurable settings
-6. **Sandboxed File Operations**: Plugins have limited access to the file system for security
-7. **Error Handling**: Robust error handling with dedicated error callbacks
-8. **Runtime Attribute Protection**: Automatic protection against missing attribute errors
-9. **Thread Safety**: Tools for ensuring UI thread safety in plugin components
+3. **Inter-Plugin Communication**: Plugins communicate via an event bus
+4. **Dependency Management**: Plugins can declare and check dependencies (including external libraries)
+5. **Configuration Management**: Plugins can have user-configurable settings and schemas
+6. **Sandboxed File Operations**: Plugins have limited, secure file system access
+7. **Error Handling**: Robust error handling and error callbacks
+8. **Runtime Attribute Protection**: Automatic patching for missing attributes/methods
+9. **Thread Safety**: Tools for safe UI updates from plugin threads
 
 ## Creating a Plugin
 
@@ -27,10 +27,13 @@ A plugin is a Python package with the following structure:
 ```
 plugins/
   my_plugin/
-    __init__.py       # Main plugin code with IrintaiPlugin class
-    config_schema.json  # Optional plugin configuration schema
-    resources/        # Optional additional resources
-    README.md         # Optional documentation
+    __init__.py         # Main plugin code with IrintaiPlugin class and plugin_info
+    core/               # (Recommended) Core logic for the plugin
+    ui/                 # (Optional) UI components for the plugin
+    config_schema.json  # (Optional) Plugin configuration schema
+    requirements.txt    # (Optional) Plugin-specific dependencies
+    resources/          # (Optional) Additional resources (icons, etc.)
+    README.md           # (Optional) Plugin documentation
 ```
 
 ### Plugin Class
@@ -43,21 +46,22 @@ class IrintaiPlugin:
         self.plugin_id = plugin_id
         self.core = core_system
         self.logger = getattr(core_system, 'logger', None)
-        
+        # ...additional initialization...
+
     def activate(self):
         """Called when the plugin is activated"""
         return True
-        
+
     def deactivate(self):
         """Called when the plugin is deactivated"""
         return True
-        
+
     def get_actions(self):
         """Return a dictionary of actions for UI integration"""
         return {
             "Do Something": self.do_something
         }
-        
+
     def get_config_schema(self):
         """Return configuration schema for the plugin"""
         return {
@@ -68,7 +72,7 @@ class IrintaiPlugin:
                 "default": ""
             }
         }
-        
+
     def on_config_changed(self, config):
         """Called when plugin configuration changes"""
         pass
@@ -76,7 +80,7 @@ class IrintaiPlugin:
 
 ### Plugin Metadata
 
-Additionally, you must define plugin metadata in the `__init__.py` file:
+You must define plugin metadata in the `__init__.py` file:
 
 ```python
 plugin_info = {
@@ -92,7 +96,13 @@ plugin_info = {
 }
 ```
 
-## Plugin SDK
+### Plugin Requirements
+
+- List any extra dependencies in a `requirements.txt` inside your plugin folder (optional, recommended for advanced plugins).
+- All core dependencies (e.g., `customtkinter`, `pymupdf`, `pytesseract`, etc.) are available if listed in the main `requirements.txt`.
+- If your plugin requires external binaries (e.g., Tesseract for OCR), document this in your plugin README.
+
+## Plugin SDK and Core Services
 
 The `PluginSDK` class is provided to each plugin during initialization, offering standardized access to Irintai services:
 
@@ -285,7 +295,10 @@ Distribute your plugin as a ZIP file with the following structure:
 my_plugin.zip
   my_plugin/
     __init__.py
+    core/
+    ui/
     config_schema.json
+    requirements.txt
     ...
 ```
 

@@ -128,6 +128,40 @@ The following tools can automatically fix common issues:
 3. Ensure the memory mode is properly set in the configuration
 4. Try re-indexing your documents
 
+## Dependency Issues and Missing Features
+
+If you encounter errors such as missing UI panels, plugin features not loading, or import errors like `ModuleNotFoundError` for packages such as `customtkinter`, `pymupdf`, or `pytesseract`, follow these steps:
+
+1. **Install All Required Dependencies**
+   - Always use the main `requirements.txt` in the project root:
+     ```powershell
+     pip install -r requirements.txt
+     ```
+   - This ensures all core, UI, and plugin dependencies are installed (including `customtkinter`, `pymupdf`, `pytesseract`, `pillow`, etc.).
+
+2. **OCR Features**
+   - For PDF/image OCR, you must also install the Tesseract OCR engine (not just the Python packages):
+     - **Windows**: Download from [UB Mannheim Tesseract](https://github.com/UB-Mannheim/tesseract/wiki)
+     - **Linux**: `sudo apt install tesseract-ocr`
+     - **macOS**: `brew install tesseract`
+   - After installing, ensure the Tesseract binary is in your system PATH.
+
+3. **Plugin-Specific Issues**
+   - Some plugins require extra dependencies (e.g., `customtkinter` for Ollama Hub). These are now included in the main `requirements.txt`.
+   - If a plugin fails to load due to a missing dependency, re-run the install command above.
+
+4. **Verifying Installation**
+   - Run the enhanced diagnostics tool to check for missing dependencies:
+     ```powershell
+     python diagnostics\enhanced_diagnostics.py --basic
+     ```
+   - Review the output for any missing or incompatible packages.
+
+5. **General Tips**
+   - Always activate your virtual environment (if used) before installing or running the application.
+   - If you update `requirements.txt`, re-run the install command.
+   - For persistent issues, check the logs in `data/logs/` and the generated diagnostic report.
+
 ## Log Analysis
 
 Log files contain valuable information for troubleshooting:

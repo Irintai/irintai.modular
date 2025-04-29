@@ -3,10 +3,10 @@ Version information for IrintAI Assistant
 """
 
 # Version information in semantic versioning format (major.minor.patch)
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Build information
-BUILD_DATE = "2025-04-10"
+BUILD_DATE = "2025-04-28"
 BUILD_TYPE = "development"
 
 # Version as tuple for comparison

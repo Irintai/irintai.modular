@@ -197,3 +197,61 @@ After installation, you can verify that everything is set up correctly using the
    ```
 
 These tools will check for any issues with your installation, configuration, dependencies, and plugin system. If any problems are found, they will provide guidance on how to fix them.
+
+## Required Dependencies
+
+Irintai Assistant requires several Python packages for full functionality, including advanced UI and plugin features. All dependencies are listed in `requirements.txt` and can be installed with:
+
+```powershell
+pip install -r requirements.txt
+```
+
+**Key dependencies include:**
+- `sentence-transformers`, `torch`, `numpy` (vector and model operations)
+- `psutil` (system monitoring)
+- `python-docx`, `PyPDF2`, `pymupdf` (document processing)
+- `pillow`, `pytesseract` (image processing and OCR)
+- `customtkinter`, `ttkthemes`, `matplotlib` (UI enhancements)
+- `requests`, `loguru`, `scikit-learn` (networking, logging, ML utilities)
+- `pytest`, `mypy`, `black` (development/testing)
+
+> **Note:** For OCR features, you must also install the Tesseract OCR engine (see below).
+
+## Additional Setup for OCR Features
+
+To use PDF/image OCR features, you must install the Tesseract OCR engine in addition to the Python packages:
+
+- **Windows:** Download from [UB Mannheim Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and add to your PATH
+- **Linux:**
+  ```sh
+  sudo apt install tesseract-ocr
+  ```
+- **macOS:**
+  ```sh
+  brew install tesseract
+  ```
+
+## Quick Installation Steps
+
+1. **Clone the repository:**
+   ```powershell
+   git clone https://github.com/Irintai/irintai.modular.git
+   cd irintai
+   ```
+2. **(Recommended) Create and activate a virtual environment:**
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\activate
+   ```
+3. **Install all dependencies:**
+   ```powershell
+   pip install -r requirements.txt
+   ```
+4. **Install Ollama:**
+   - Download and install from [ollama.ai](https://ollama.ai/download)
+   - Ensure it is running before starting Irintai
+5. **(Optional) Install Tesseract OCR engine** if you want OCR features (see above)
+6. **Run the application:**
+   ```powershell
+   python irintai.py
+   ```

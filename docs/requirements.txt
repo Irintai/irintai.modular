@@ -11,8 +11,11 @@ pyyaml>=6.0                   # Configuration management
 python-docx>=0.8.11           # Microsoft Word document support
 PyPDF2>=2.10.0                # PDF document support
 pillow>=9.3.0                 # Image processing for documents with images
+pytesseract>=0.3.10           # OCR for image text extraction
+pymupdf>=1.21.1               # PDF and image processing (fitz)
 
 # User Interface
+customtkinter
 tkinter                       # Default with Python, included for documentation
 ttkthemes>=3.2.2              # Enhanced UI themes
 matplotlib>=3.6.0             # For visualizations in the Resource Monitor

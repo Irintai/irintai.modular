@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>IrintAI Assistant Upgrade Cycle Documentation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: #333333;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>IrintAI Assistant Upgrade Cycle Documentation</h1>
+
+    <h2>🛠️ When to Update Each File</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>When to Update</th>
+                <th>How to Update</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><code>VERSION.txt</code></td>
+                <td>Every time you create a new version (v2.0, v3.0, etc.)</td>
+                <td>Copy from VERSION_TEMPLATE.txt<br>Update version number and date<br>List key changes<br>Add any
+                    migration notes</td>
+            </tr>
+            <tr>
+                <td><code>CHANGELOG.md</code></td>
+                <td>Every time you make <b>meaningful changes</b></td>
+                <td>Add a new section at the top: ## [vX.X] - YYYY-MM-DD<br>Use Added, Changed, Fixed, Removed sections
+                </td>
+            </tr>
+            <tr>
+                <td><code>irintai_architecture_diagram_full_offline.html</code></td>
+                <td>When the diagram itself changes</td>
+                <td>Edit or replace the diagram content<br>Retain HTML structure</td>
+            </tr>
+            <tr>
+                <td><code>launch_irintai_viewer.bat</code></td>
+                <td>Only if file names change</td>
+                <td>Update the .html filename inside if needed</td>
+            </tr>
+            <tr>
+                <td><code>launch_irintai_viewer_smart.bat</code></td>
+                <td>Only if error handling or filenames change</td>
+                <td>Ensure it points to correct .html file</td>
+            </tr>
+            <tr>
+                <td><code>README.txt</code></td>
+                <td>When major features or instructions change</td>
+                <td>Add updated setup steps if needed</td>
+            </tr>
+            <tr>
+                <td><code>README_UPGRADE.txt</code></td>
+                <td>Only if the upgrade process itself changes</td>
+                <td>Update if you modify the upgrade batch script logic</td>
+            </tr>
+            <tr>
+                <td><code>upgrade_irintai.bat</code></td>
+                <td>Only if new upgrade needs emerge</td>
+                <td>Update deletion targets or copy behavior if structure changes</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>🧠 Practical Upgrade Workflow (Step-by-Step)</h2>
+    <p><b>Whenever you plan a new release:</b></p>
+    <ol>
+        <li>Edit your new diagram or features.</li>
+        <li>Copy VERSION_TEMPLATE.txt → Create a fresh VERSION.txt.</li>
+        <li>Open CHANGELOG_TEMPLATE.md → Add a new version block at the top.</li>
+        <li>Update README.txt if there are major user-facing changes.</li>
+        <li>Test your launch batch files (especially if file names change).</li>
+        <li>Zip everything cleanly for deployment: New HTML, Updated BATs, Updated README/VERSION, New update_files/.
+        </li>
+        <li>(Optional) Update README_UPGRADE.txt if major upgrade methods change.</li>
+        <li>Distribute the Upgrade Kit ZIP to your team.</li>
+        <li>Instruct teammates: “Double-click upgrade_irintai.bat — Done.”</li>
+    </ol>
+
+    <h2>📜 Example Versioning Pattern</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Version</th>
+                <th>Changes</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>v1.0</td>
+                <td>Initial release</td>
+                <td>Manual offline viewing, basic batch launcher</td>
+            </tr>
+            <tr>
+                <td>v2.0</td>
+                <td>New diagram nodes added, smart launcher improved</td>
+                <td>Upgrade kit provided</td>
+            </tr>
+            <tr>
+                <td>v3.0</td>
+                <td>Major semantic layer overhaul</td>
+                <td>Requires minor README updates</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>🔥 BONUS: Pro Tips for Long-Term Success</h2>
+    <ul>
+        <li>Always increment version numbers logically:<br>Major (v1 → v2) = Big diagram or system changes.<br>Minor
+            (v2.1 → v2.2) = Small fixes or instructions.</li>
+        <li>Always timestamp your VERSION.txt clearly.</li>
+        <li>Keep your CHANGELOG.md public if you ever open the project up (e.g., GitHub, team drive).</li>
+    </ul>
+
+    <h2>🎯 Summary of Deliverables Completed</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Task</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Offline deployment kit</td>
+                <td>✅ Done</td>
+            </tr>
+            <tr>
+                <td>Upgrade automation kit</td>
+                <td>✅ Done</td>
+            </tr>
+            <tr>
+                <td>README and Upgrade documentation</td>
+                <td>✅ Done</td>
+            </tr>
+            <tr>
+                <td>VERSION.txt template</td>
+                <td>✅ Done</td>
+            </tr>
+            <tr>
+                <td>CHANGELOG.md template</td>
+                <td>✅ Done</td>
+            </tr>
+            <tr>
+                <td>Full Upgrade Cycle Documentation</td>
+                <td>✅ Done</td>
+            </tr>
+        </tbody>
+    </table>
+
+</body>
+
+</html>

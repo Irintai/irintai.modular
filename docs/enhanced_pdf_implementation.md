@@ -24,7 +24,7 @@ The Enhanced PDF Extraction System in IrintAI Assistant consists of three main c
 
 ## Components and Purpose
 
-### 1. EnhancedPDFExtractor (`utils/enhanced_pdf.py`)
+### 1. EnhancedPDFExtractor (`file_operations/pdf_file_ops.py`)
 
 The core extraction engine with responsibility for:
 
@@ -36,7 +36,7 @@ The core extraction engine with responsibility for:
 
 This component is designed to be independent of the IrintAI ecosystem and could be extracted as a standalone library if needed.
 
-### 2. PDFFileOps (`utils/pdf_file_ops.py`)
+### 2. PDFFileOps (`file_operations/pdf_file_ops.py`)
 
 Integration adapter between FileOps and the PDF extractor:
 
@@ -48,7 +48,7 @@ Integration adapter between FileOps and the PDF extractor:
 
 This component adapts the generic PDF extractor to the FileOps interface.
 
-### 3. EnhancedMemoryFileHandler (`utils/memory_pdf_integration.py`)
+### 3. EnhancedMemoryFileHandler (`memory_system/memory_pdf_integration.py`)
 
 High-level integration with the Memory system:
 
@@ -228,3 +228,36 @@ def test_memory_pdf_integration():
     results = memory_system.search("test query")
     assert len(results) > 0
 ```
+
+## Updated Implementation Analysis (2025)
+
+### File Locations
+- **PDF extraction logic:** `file_operations/pdf_file_ops.py` (not `utils/enhanced_pdf.py`)
+- **Memory integration:** `memory_system/memory_pdf_integration.py`
+- **FileOps base:** `file_operations/file_ops.py`
+
+### Key Implementation Details
+- The core class is `EnhancedPDFExtractor` (in `file_operations/pdf_file_ops.py`).
+- `PDFFileOps` acts as an adapter, providing PDF-specific operations and metadata extraction, and routing to `EnhancedPDFExtractor`.
+- `EnhancedMemoryFileHandler` (in `memory_system/memory_pdf_integration.py`) integrates PDF extraction with the memory system, handling both single files and folders.
+- All components use robust error handling and logging.
+- OCR is optional and gracefully degrades if dependencies are missing.
+- The system supports both page-level and document-level preprocessing, including header/footer removal, math symbol normalization, and whitespace cleanup.
+- Metadata extraction includes page count, file size, encryption status, and image count.
+
+### Plugin/Extensibility Notes
+- The PDF extraction system is not a plugin but is fully extensible:
+  - Additional preprocessing or OCR engines can be added by subclassing or extending methods in `EnhancedPDFExtractor`.
+  - The memory integration handler can be extended for custom workflows or additional file types.
+- All advanced dependencies (`pymupdf`, `pytesseract`, `pillow`, `numpy`) are listed in the main `requirements.txt`.
+- For OCR, the Tesseract binary must be installed separately (see INSTALLATION.md).
+
+### Usage in the Application
+- The memory panel and document ingestion features use this system for all PDF files.
+- Users can enable or disable OCR as needed.
+- The system is designed for high reliability, with fallback and logging for all error cases.
+
+### Best Practices
+- Always check for OCR dependencies and Tesseract installation if using OCR features.
+- Use the provided integration points for extending preprocessing or metadata extraction.
+- For plugin authors: use the memory system's file handler for PDF ingestion to ensure consistent processing.

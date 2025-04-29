@@ -1,54 +1,59 @@
 ### Plugin System Architecture ###
 **Core Principles**
 
-Modular Design
-Easy Installation
-Configurable Activation
-Sandboxed Execution
-Minimal Core Dependency
-Error Resilience
-Thread Safety
+- Modular Design
+- Easy Installation and Upgrade
+- Configurable Activation/Deactivation
+- Sandboxed Execution and Security
+- Minimal Core Dependency
+- Error Resilience and Self-Healing
+- Thread Safety and UI Isolation
+- Dependency Management and Versioning
 
 ## Plugin Types ##
 **Core Functionality Plugins**
 Extend base capabilities of the system
 
 **Examples:**
-
-Additional embedding models
-New model formatters
-Custom memory retrieval strategies
-Advanced logging mechanisms
+- Additional embedding models
+- New model formatters
+- Custom memory retrieval strategies
+- Advanced logging mechanisms
 
 ## UI Extension Plugins ##
-Add new panels or widgets
+Add new panels, widgets, or UI enhancements
 
 **Examples:**
+- Data visualization tools
+- External API integrations
+- Custom dashboard widgets
+- Specialized analysis panels
 
-Data visualization tools
-External API integrations
-Custom dashboard widgets
-Specialized analysis panels
-
-# Processing Plugins #
+## Processing Plugins ##
 Add specialized processing capabilities
 
 **Examples:**
-
-Advanced document parsing
-Language-specific code analysis
-Custom text preprocessing
-Specialized embedding techniques
+- Advanced document parsing
+- Language-specific code analysis
+- Custom text preprocessing
+- Specialized embedding techniques
 
 ### Plugin Structure ###
 
 irintai/
 └── plugins/
     ├── __init__.py
-    ├── core_plugins/
-    ├── ui_plugins/
-    ├── processing_plugins/
-    └── plugin_manager.py
+    ├── core_plugins/           # Core system extensions
+    ├── ui_plugins/             # UI and panel extensions
+    ├── processing_plugins/     # Specialized data processing
+    ├── plugin_manager.py       # Plugin lifecycle and loading
+    └── [plugin_name]/          # Individual plugin folders
+        ├── __init__.py
+        ├── core/               # Core logic for the plugin
+        ├── ui/                 # UI components (if any)
+        ├── requirements.txt    # Plugin-specific dependencies (optional)
+        ├── plugin.json         # Plugin manifest/metadata
+        └── ...
 
 ### Plugin Manifest (plugin.json) ###
 **Example Code:**

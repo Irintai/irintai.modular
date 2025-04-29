@@ -219,4 +219,6 @@
    - Create developer documentation
    - Establish contribution guidelines
 
+---
+
 The Irintai Assistant has a strong foundation as a local-first AI assistant with powerful memory capabilities. By focusing on these development pathways, it could evolve into an essential tool for knowledge workers, developers, researchers, and creative professionals while maintaining its commitment to privacy and local processing.

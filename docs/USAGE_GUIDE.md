@@ -13,6 +13,7 @@ This guide provides comprehensive instructions for using the Irintai Assistant a
 7. [Dashboard](#dashboard)
 8. [Advanced Features](#advanced-features)
 9. [Tips and Best Practices](#tips-and-best-practices)
+10. [Installation and Requirements](#installation-and-requirements)
 
 ## Getting Started
 
@@ -379,3 +380,33 @@ It's a good practice to occasionally back up these directories:
 - `data/vector_store/`: Contains your document indices
 - `data/config.json`: Contains your settings
 - `data/chat_history.json`: Contains your conversation history
+
+## Installation and Requirements
+
+Before using Irintai Assistant, ensure you have installed all required dependencies. These are listed in `requirements.txt` and include:
+
+- sentence-transformers (vector embeddings)
+- torch (deep learning backend)
+- numpy (array operations)
+- psutil (system monitoring)
+- python-docx, PyPDF2, pymupdf (document processing)
+- pillow, pytesseract (image processing and OCR)
+- pyyaml, python-dotenv (configuration)
+- customtkinter, ttkthemes, matplotlib (UI enhancements)
+- requests (networking)
+- loguru (logging)
+- scikit-learn (ML utilities)
+- pytest, mypy, black (development/testing)
+
+To install all dependencies, run:
+
+```powershell
+pip install -r requirements.txt
+```
+
+> **Note:**
+> - `customtkinter` is required for some plugin UIs (e.g., Ollama Hub). 
+> - `pymupdf` (imported as `fitz`) is required for advanced PDF processing.
+> - For OCR features, you must also install the Tesseract OCR engine separately (see INSTALLATION.md for details).
+
+For full installation instructions, see [INSTALLATION.md](INSTALLATION.md).

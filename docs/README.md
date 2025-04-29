@@ -6,7 +6,7 @@ A local-first AI assistant for chat interactions, vector memory, and knowledge m
 
 ## Overview
 
-Irintai Assistant is a desktop application that provides an interface for interacting with local AI language models through Ollama. It features a chat interface, vector-based memory system, and comprehensive model management capabilities - all while keeping your data private and on your own hardware.
+Irintai Assistant is a desktop application that provides an interface for interacting with local AI language models through Ollama. It features a chat interface, vector-based memory system, plugin support, and comprehensive model management capabilities—all while keeping your data private and on your own hardware.
 
 ## Features
 
@@ -14,7 +14,7 @@ Irintai Assistant is a desktop application that provides an interface for intera
 - **Chat Interface**: Clean, intuitive interface for conversations with AI models
 - **Vector Memory**: Store and retrieve documents with semantic search capabilities
 - **Model Management**: Download, manage, and switch between different AI models
-- **Plugin System**: Extend functionality with modular plugins
+- **Plugin System**: Extend functionality with modular plugins (including advanced UI plugins)
 - **System Configuration**: Comprehensive settings for customizing behavior
 - **Performance Monitoring**: Real-time monitoring of system resources
 - **Configurable Prompting**: System prompts, memory usage, and more
@@ -24,26 +24,30 @@ Irintai Assistant is a desktop application that provides an interface for intera
 - Python 3.8 or higher
 - [Ollama](https://ollama.ai/) installed and running
 - Required Python packages (see `requirements.txt`)
+  - Includes: `customtkinter`, `pymupdf`, `pytesseract`, `pillow`, and more
 - Sufficient disk space for AI models (varies by model, typically 4GB-15GB per model)
 - GPU recommended but not required
+- For OCR features: [Tesseract OCR engine](https://github.com/UB-Mannheim/tesseract/wiki) (see USAGE_GUIDE.md)
 
 ## Installation
 
 1. Clone the repository:
-   ```
+   ```powershell
    git clone https://github.com/irintai/irintai.git
    cd irintai
    ```
 
 2. Install required packages:
-   ```
+   ```powershell
    pip install -r requirements.txt
    ```
+
+   > If you plan to use OCR features (PDF/image text extraction), you must also install the Tesseract OCR engine separately. See [USAGE_GUIDE.md](docs/USAGE_GUIDE.md) for details.
 
 3. Install Ollama following the instructions at [ollama.ai](https://ollama.ai)
 
 4. Run the application:
-   ```
+   ```powershell
    python irintai.py
    ```
 
@@ -61,7 +65,7 @@ The application can be configured through the Settings tab or by editing `data/c
 
 - **Model Path**: Where to store AI models
 - **Memory Mode**: How context from vector memory should be used
-- **System Prompt**: Default instructions for the AI assistant 
+- **System Prompt**: Default instructions for the AI assistant
 - **8-bit Mode**: Enable for reduced memory usage with larger models
 
 ## Project Structure

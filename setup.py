@@ -23,9 +23,22 @@ def detect_cuda():
                 cuda_version = match.group(1)
                 print(f"✓ CUDA detected: {cuda_version}")
                 return cuda_version
-        except Exception:
-            pass
-    
+            else:
+                print("NVIDIA GPU detected, but CUDA version not found in nvidia-smi output.")
+        except Exception as e:
+            print("nvidia-smi not found or failed to run. Assuming no CUDA available.")
+            # Optionally, check for CUDA toolkit in PATH
+            cuda_path = os.environ.get('CUDA_PATH')
+            if cuda_path:
+                version_file = Path(cuda_path) / 'version.txt'
+                if version_file.exists():
+                    with open(version_file, 'r') as f:
+                        version_line = f.readline()
+                        match = re.search(r'(\d+\.\d+)', version_line)
+                        if match:
+                            cuda_version = match.group(1)
+                            print(f"✓ CUDA toolkit detected: {cuda_version}")
+                            return cuda_version
     return None
 
 def get_cuda_pytorch_version(cuda_version):
@@ -60,7 +73,7 @@ def install_pytorch(cuda_pytorch_version):
         cmd = f"pip install torch=={pytorch_version} --index-url https://download.pytorch.org/whl/{cuda_pytorch_version}"
     else:
         print("Installing PyTorch CPU version...")
-        cmd = f"pip install torch=={pytorch_version}"
+        cmd = f"pip install torch=={pytorch_version} --index-url https://download.pytorch.org/whl/cpu"
     
     print(f"Running: {cmd}")
     os.system(cmd)
@@ -85,7 +98,8 @@ def verify_installation():
 def install_requirements():
     """Install the remaining packages from requirements.txt."""
     print("\nInstalling remaining requirements...")
-    os.system("pip install -r requirements.txt")
+    # Use pip to install requirements with upgrade and force-reinstall to avoid version conflicts
+    os.system("pip install --upgrade --force-reinstall -r requirements.txt")
 
 def main():
     print("=" * 70)
@@ -93,7 +107,7 @@ def main():
     print("=" * 70)
     
     # Ensure we're in a virtual environment
-    if not hasattr(sys, 'real_prefix') and not sys.base_prefix != sys.prefix:
+    if not (hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix)):
         print("⚠ Warning: Not running in a virtual environment!")
         if input("Continue anyway? (y/n): ").lower() != 'y':
             sys.exit(1)

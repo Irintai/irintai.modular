@@ -1,3 +1,27 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Irintai Architecture Diagram (Fully Offline)</title>
+    <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var script = document.createElement('script');
+        script.src = './mermaid.min.js';  // Local loading
+        script.onload = function() {
+            mermaid.initialize({ startOnLoad: true });
+        };
+        document.head.appendChild(script);
+    });
+    </script>
+    <style>
+        body { background-color: #ffffff; font-family: Arial, sans-serif; }
+        .mermaid { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Irintai Architecture Diagram (Offline Mode)</h1>
+    <div class="mermaid">
 graph TD
     %% Main Application
     irintai[irintai.py\nMain Entry Point]
@@ -177,3 +201,7 @@ graph TD
     class utils,logger,system_monitor,file_ops,event_bus,dependency_manager utils;
     class plugins,personality_plugin,model_training_plugin,network_monitoring_plugin plugins;
     class data,models,logs,reflections,vector_store data;
+
+    </div>
+</body>
+</html>

@@ -1,0 +1,15 @@
+
+IrintAI Assistant Offline Viewer Kit - Version Log
+=========================================
+
+Version: 1.0
+Release Date: 2025-04-29 05:05:41
+
+Notes:
+- Initial full offline architecture viewer release.
+- Includes standard and smart batch launchers.
+- Editable Mermaid diagram format.
+- README instructions provided.
+- Future versions will note any structural or diagram changes here.
+
+-- IrintAI Assistant Project

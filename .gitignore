@@ -40,6 +40,7 @@ data/logs/
 *.log
 *.sqlite
 *.db
+Irintai_Docs_Website/
 
 # AI model files (typically large)
 data/models/*

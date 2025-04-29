@@ -363,7 +363,7 @@ class CustomMemorySystem:
     def add_to_index(self, docs, metadata):
         # Your implementation here
         pass
-        
+    
     # Implement other required methods...
 ```
 

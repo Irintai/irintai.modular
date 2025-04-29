@@ -2,16 +2,17 @@ d:\AI\IrintAI Assistant\
 │
 ├── irintai.py                  # Main application entry point
 │
-├── core\                       # Core components
+├── core\                      # Core components
 │   ├── __init__.py             # Core module initialization
 │   ├── chat_engine.py          # Chat interface with language models
 │   ├── config_manager.py       # Configuration management
 │   ├── memory_system.py        # Vector storage and retrieval
 │   ├── model_manager.py        # Handles Ollama model operations
 │   ├── plugin_manager.py       # Plugin lifecycle management
-│   └── plugin_sdk.py           # SDK for plugin development
+│   ├── plugin_sdk.py           # SDK for plugin development
+│   └── settings_manager.py     # Application settings manager
 │
-├── utils\                      # Utility modules
+├── utils\                     # Utility modules
 │   ├── __init__.py             # Utils module initialization
 │   ├── attribute_checker.py    # Attribute error prevention
 │   ├── file_ops.py             # File operations utilities
@@ -22,7 +23,7 @@ d:\AI\IrintAI Assistant\
 │   ├── system_monitor.py       # System resource monitoring
 │   └── version.py              # Version information
 │
-├── ui\                         # User interface components
+├── ui\                        # User interface components
 │   ├── __init__.py             # UI module initialization
 │   ├── chat_panel.py           # Chat interface panel
 │   ├── config_panel.py         # Configuration settings panel
@@ -35,21 +36,21 @@ d:\AI\IrintAI Assistant\
 │   ├── plugin_panel.py         # Plugin management interface
 │   └── resource_monitor_panel.py # Resource monitoring panel
 │
-├── plugins\                    # Plugin directory
-│   ├── personality_plugin\     # Example plugin: Personality
+├── plugins\                   # Plugin directory
+│   ├── personality_plugin\    # Example plugin: Personality
 │   │   ├── __init__.py         # Plugin initialization
 │   │   ├── bridge.py           # Integration helpers
-│   │   ├── core\               # Plugin core functionality
+│   │   ├── core\              # Plugin core functionality
 │   │   │   ├── __init__.py     # Core module initialization
 │   │   │   ├── helpers.py      # Helper functions
 │   │   │   └── personality_plugin.py # Main plugin implementation
-│   │   └── ui\                 # Plugin UI components
+│   │   └── ui\                # Plugin UI components
 │   │       ├── __init__.py     # UI module initialization
 │   │       └── panel.py        # Plugin panel UI
 │   │
-│   ├── network_monitoring\     # Network monitoring plugin
+│   ├── network_monitoring\    # Network monitoring plugin
 │   │   └── core\
-│   │       └── network_monitoring.py # Network monitoring implementation
+│   │       └── network_monitoring.py # Network monitoring 
 │   │
 │   └── model_training_performance\ # Model training plugin
 │
@@ -58,7 +59,7 @@ d:\AI\IrintAI Assistant\
 ├── fix_plugin_manager.py       # Plugin manager repair utility
 ├── update_plugin_manager.py    # Updates missing plugin methods
 │
-├── data\                       # Data directory (created at runtime)
+├── data\                      # Data directory (created at runtime)
 │   ├── logs\                   # Log files
 │   ├── models\                 # Model storage
 │   ├── plugins\                # Plugin data
@@ -67,6 +68,23 @@ d:\AI\IrintAI Assistant\
 │   ├── reflections\            # System self-reflection data
 │   └── vector_store\           # Vector embeddings storage
 │
-└── resources\                  # Application resources
-    └── icons\                  # Application icons
-        └── irintai_icon.ico    # Application icon
+├── resources\                  # Application resources
+│   └── icons\                  # Application icons
+│       └── irintai_icon.ico    # Application icon
+│
+├── docs\                      # Documentation and guides
+│   ├── API_DOCUMENTATION.md
+│   ├── enhanced_pdf_extraction_api.md
+│   ├── enhanced_pdf_extraction.md
+│   ├── enhanced_pdf_implementation.md
+│   ├── INSTALLATION.md
+│   ├── Irintai Assistant.md
+│   ├── plugin_api.md
+│   ├── Plugin_integration.md
+│   ├── project-structure.md
+│   ├── README.md
+│   ├── requirements.txt
+│   ├── TROUBLESHOOTING.md
+│   ├── USAGE_GUIDE.md
+│   ├── IrintAI_Assistant_Architecture_Offline\
+│   └── resources\

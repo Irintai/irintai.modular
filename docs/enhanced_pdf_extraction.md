@@ -2,100 +2,249 @@
 
 ## Overview
 
-The Enhanced PDF Extraction System is a specialized component of Irintai Assistant that significantly improves the quality of text extraction from PDF documents. This system addresses common challenges when working with PDF files, including inconsistent formatting, binary data artifacts, and text extraction from image-based PDFs.
+The Enhanced PDF Extraction System in Irintai Assistant provides robust, extensible, and high-quality text extraction from PDF documents for use in the memory system and beyond. It addresses common PDF challenges such as inconsistent formatting, binary artifacts, and image-based (scanned) PDFs.
+
+## Architecture and Components
+
+The system is composed of three main components:
+
+1. **EnhancedPDFExtractor** (`file_operations/pdf_file_ops.py`)
+   - Core PDF text extraction, preprocessing, and optional OCR.
+2. **PDFFileOps** (`file_operations/pdf_file_ops.py`)
+   - Adapter that integrates PDF extraction with the FileOps system, provides metadata extraction, and error handling.
+3. **EnhancedMemoryFileHandler** (`memory_system/memory_pdf_integration.py`)
+   - Integrates enhanced PDF extraction with the Memory system, supporting both single files and folders.
 
 ## Key Features
 
-The Enhanced PDF Extraction System offers three main improvements:
+- **High-Quality Extraction**: Uses PyMuPDF (fitz) for parsing and metadata.
+- **Advanced Preprocessing**: Cleans, normalizes, and improves extracted text (newline normalization, math symbol replacement, header/footer removal, etc.).
+- **Selective OCR**: Uses pytesseract and Pillow for image-based PDFs, only when needed (pages with little text and images).
+- **Extensible**: Developers can extend preprocessing, OCR, and metadata extraction.
+- **Graceful Degradation**: If OCR dependencies are missing, the system logs a warning and continues with text extraction only.
 
-1. **High-Quality Text Extraction**: Uses PyMuPDF (fitz) for superior PDF parsing compared to basic text extraction methods.
-2. **Advanced Text Preprocessing**: Automatically cleans extracted text to improve readability and remove common PDF artifacts.
-3. **Optical Character Recognition (OCR)**: Optional OCR capabilities for extracting text from image-based PDFs or scanned documents.
+## Usage in Irintai
 
-## Using Enhanced PDF Processing
+- PDF extraction is used automatically when loading files into memory (via the Memory tab or API).
+- OCR can be enabled/disabled in the Memory tab settings.
+- All advanced dependencies are listed in `requirements.txt`. For OCR, Tesseract must be installed separately.
 
-### Loading PDF Documents
+## API and Integration
 
-The enhanced PDF extraction system is automatically used whenever you load PDF documents into the memory system:
+### 1. EnhancedPDFExtractor
 
-1. Go to the **Memory** tab
-2. Use either:
-   - **Load Files** button to select individual PDF files
-   - **Load Folder** button to load multiple documents at once
-3. All PDF files will be processed using the enhanced extraction system
+```python
+from file_operations.pdf_file_ops import EnhancedPDFExtractor
+extractor = EnhancedPDFExtractor(logger=print, ocr_enabled=True, ocr_lang="eng")
+success, text = extractor.extract_text_from_pdf("path/to/document.pdf")
+```
 
-### PDF Settings
+### 2. PDFFileOps
 
-You can customize PDF processing behavior through settings:
+```python
+from file_operations.pdf_file_ops import PDFFileOps
+from file_operations.file_ops import FileOps
+file_ops = FileOps(logger=print)
+pdf_ops = PDFFileOps(file_ops, enable_ocr=True)
+success, text = pdf_ops.read_pdf("path/to/document.pdf")
+metadata = pdf_ops.get_pdf_metadata("path/to/document.pdf")
+```
 
-1. Go to the **Memory** tab
-2. Navigate to the **Settings** tab
-3. In the **PDF Processing** section:
-   - Toggle **Enable OCR for image-based PDFs** to activate OCR capabilities
-   - Use the **Check OCR Installation** button to verify OCR dependencies
+### 3. EnhancedMemoryFileHandler
 
-## OCR Capabilities
+```python
+from memory_system.memory_pdf_integration import EnhancedMemoryFileHandler
+enhanced_memory = EnhancedMemoryFileHandler(memory_system, file_ops, enable_ocr=True, logger=print)
+success = enhanced_memory.add_file_to_memory("path/to/document.pdf")
+processed, successful = enhanced_memory.add_folder_to_memory("path/to/folder")
+```
 
-### Requirements for OCR
+#### Factory Function for Memory Integration
 
-To use OCR features for extracting text from image-based PDFs:
+```python
+from memory_system.memory_pdf_integration import enhance_memory_system
+memory_system = MemorySystem(...)
+file_ops = FileOps(...)
+enhanced_memory = enhance_memory_system(memory_system, file_ops, enable_ocr=True)
+```
 
-1. **Python Packages** (automatically checked by the application):
-   - pytesseract
-   - Pillow (PIL)
-   
-   Install using: `pip install pytesseract pillow`
+## PDF Preprocessing and OCR Details
 
-2. **Tesseract OCR Engine** (must be installed separately):
-   - **Windows**: Download from [UB-Mannheim Tesseract Installer](https://github.com/UB-Mannheim/tesseract/wiki)
-   - **Linux**: `sudo apt install tesseract-ocr`
-   - **macOS**: `brew install tesseract`
-
-### When OCR is Used
-
-The system intelligently applies OCR only when necessary:
-
-- The system first attempts regular text extraction for each PDF page
-- If a page contains very little text (<100 characters) AND contains images, OCR is applied
-- Only pages that need OCR will be processed this way, improving performance
-
-## PDF Preprocessing Features
-
-The enhanced PDF extraction system applies several text preprocessing techniques:
-
-1. **Text Normalization**:
-   - Regularizes newlines and paragraph breaks
-   - Removes control characters and null bytes
-   - Fixes Unicode replacement characters
-
-2. **Mathematical Symbol Handling**:
-   - Converts common math symbols to readable text (α → "alpha", π → "pi", etc.)
-   - Improves readability and searchability of scientific documents
-
-3. **Layout Improvements**:
-   - Removes excessive whitespace while preserving paragraph structure
-   - Fixes hyphenation issues at line breaks
-   - Removes repeated headers and footers across pages
-
-## Advantages for Memory System
-
-The enhanced PDF extraction provides several benefits for the memory system:
-
-1. **Improved Search Relevance**: Cleaner text leads to more accurate vector embeddings
-2. **Better Readability**: Normalized text is more readable in chat responses
-3. **Wider Document Support**: Can process more types of PDFs, including scanned documents
-4. **Reduced Noise**: Automated removal of headers, footers, and artifacts
+- **Text Normalization**: Newline/paragraph regularization, control character and null byte removal, Unicode fixes.
+- **Math Symbol Handling**: Converts symbols (e.g., α → "alpha", π → "pi") for better readability/search.
+- **Layout Improvements**: Removes excessive whitespace, fixes hyphenation, removes repeated headers/footers.
+- **Metadata Extraction**: Extracts page count, file size, encryption status, image count, and more.
+- **Selective OCR**: Only applied to pages with minimal text (<100 chars) and images, for performance.
 
 ## Troubleshooting
 
-### Common Issues
+- **Binary Data in Results**: Ensure you are using the latest version and all dependencies are installed.
+- **OCR Not Working**: Use the "Check OCR Installation" button and verify Tesseract is installed and in your PATH.
+- **Performance Issues**: Large/complex PDFs with OCR may be slow. Disable OCR for faster processing.
 
-- **Binary Data in Results**: If you still see binary data in results, ensure you're using the latest version of the system.
-- **OCR Not Working**: Verify Tesseract is installed correctly using the "Check OCR Installation" button.
-- **Performance Issues**: Processing large or complex PDFs with OCR may take time. Consider disabling OCR if speed is a priority.
+## Known Limitations
 
-### Known Limitations
+- **Complex Layouts**: Multi-column layouts and complex tables may not be perfectly preserved.
+- **Mathematical Equations**: Complex equations may be simplified or partially converted.
+- **Very Large PDFs**: Processing hundreds of pages may take significant time, especially with OCR enabled.
 
-- **Complex Layouts**: Multi-column layouts or complex tables may not be perfectly preserved
-- **Mathematical Equations**: Complex equations may be simplified or partially converted
-- **Very Large PDFs**: Documents with hundreds of pages may require significant processing time
+## Developer Notes and Extensibility
+
+- The system is extensible: subclass or extend preprocessing, OCR, or metadata extraction as needed.
+- All advanced dependencies are listed in `requirements.txt`. For OCR, Tesseract must be installed separately.
+
+---
+
+## Technical Details and Extensibility
+
+### Text Extraction Process
+
+The text extraction process follows these steps:
+
+1. Open PDF document with PyMuPDF
+2. For each page:
+   - Extract text using PyMuPDF's get_text() method
+   - Check if text content is minimal and page contains images
+   - Apply OCR if needed and enabled
+   - Clean and preprocess the extracted text
+   - Add page metadata
+3. Combine all page content
+4. Apply global document-level cleaning
+5. Return the processed text
+
+### Text Preprocessing
+
+Text preprocessing includes multiple stages:
+
+#### Page-Level Preprocessing
+- Newline normalization
+- Control character removal
+- Unicode replacement character handling
+- Math symbol replacement
+- Whitespace normalization
+- Hyphenation fix at line breaks
+
+#### Document-Level Preprocessing
+- Header/footer detection and removal
+- Final cleanup of excessive blank lines
+
+### OCR Implementation
+
+OCR is implemented with a pragmatic approach:
+
+- Only applied when regular extraction yields minimal text (<100 chars)
+- Only processed for pages containing images
+- Increases resolution for better OCR results
+- Handles OCR failures gracefully
+- Reports statistics on OCR usage
+
+### Error Handling
+
+Comprehensive error handling is implemented:
+
+- File existence checks
+- PDF format validation
+- PyMuPDF exception handling
+- OCR exception handling
+- Missing dependency detection
+
+### Performance Considerations
+
+The system makes several performance optimizations:
+
+- Selective OCR only where needed
+- Caching of frequently accessed PDFs
+- Minimal memory footprint
+- Progress reporting for lengthy operations
+
+### Extensibility Points
+
+The system can be extended in several ways:
+
+#### Additional Preprocessing Steps
+
+New text preprocessing steps can be added to the `_preprocess_text` or `_apply_global_cleaning` methods, for example:
+
+```python
+def _preprocess_text(self, text: str) -> str:
+    # Existing preprocessing...
+    # New custom preprocessing
+    text = self._apply_custom_preprocessing(text)
+    return text
+
+def _apply_custom_preprocessing(self, text: str) -> str:
+    # Custom logic here
+    return text
+```
+
+#### Alternative OCR Engines
+
+The OCR system can be extended to support alternative OCR engines:
+
+```python
+def _ocr_page(self, page, page_num: int) -> str:
+    if self.ocr_engine == "tesseract":
+        return self._ocr_with_tesseract(page)
+    elif self.ocr_engine == "alternate":
+        return self._ocr_with_alternate_engine(page)
+    return ""
+```
+
+#### Advanced Metadata Extraction
+
+The metadata extraction can be extended to capture more document properties:
+
+```python
+def get_advanced_pdf_metadata(self, file_path: str) -> Dict[str, Any]:
+    metadata = self.get_pdf_metadata(file_path)
+    # Add advanced metadata
+    metadata["custom_property"] = self._extract_custom_property(file_path)
+    return metadata
+```
+
+### Testing Approach
+
+The PDF extraction system can be tested at multiple levels:
+
+#### Unit Testing
+
+Test individual components in isolation:
+
+```python
+def test_preprocess_text():
+    extractor = EnhancedPDFExtractor()
+    result = extractor._preprocess_text("Test\x00with\ncontrol\x0Cchars")
+    assert "\x00" not in result
+    assert "\x0C" not in result
+```
+
+#### Integration Testing
+
+Test the combined components:
+
+```python
+def test_pdf_extraction():
+    file_ops = FileOps()
+    pdf_ops = PDFFileOps(file_ops)
+    success, text = pdf_ops.read_pdf("test_document.pdf")
+    assert success
+    assert len(text) > 0
+```
+
+#### End-to-End Testing
+
+Test the complete system including the memory integration:
+
+```python
+def test_memory_pdf_integration():
+    memory_system = MemorySystem()
+    file_ops = FileOps()
+    memory_handler = EnhancedMemoryFileHandler(memory_system, file_ops)
+    result = memory_handler.add_file_to_memory("test_document.pdf")
+    assert result
+    # Verify document is in memory
+    results = memory_system.search("test query")
+    assert len(results) > 0
+```
+
+---

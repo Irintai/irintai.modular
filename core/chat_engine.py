@@ -47,6 +47,7 @@ class ChatEngine:
         """
         self.system_prompt = prompt
         self.log(f"[System Prompt] Applied: {prompt}")
+        
     def set_memory_mode(self, enabled=True, auto=False, background=False) -> None:
         """
         Set the memory mode
