@@ -94,6 +94,7 @@ data/plugins/config/*
 !data/plugins/config/.gitkeep
 data/plugins/data/*
 !data/plugins/data/.gitkeep
+eo_analyzer/
 
 # Runtime patching backup files
 *.patch.bak
