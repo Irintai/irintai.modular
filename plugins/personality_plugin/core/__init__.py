@@ -8,10 +8,10 @@ This module contains the core functionality for the Personality Plugin, includin
 """
 
 # Import the main plugin class
-from IrintAI Assistant.plugins.personality_plugin.core.personality_plugin import PersonalityPlugin
+from plugins.personality_plugin.core.personality_plugin import PersonalityPlugin
 
 # Import helper functions for easy access
-from IrintAI Assistant.plugins.personality_plugin.core.helpers import create_empty_profile
+from plugins.personality_plugin.core.helpers import (create_empty_profile,
     load_default_profiles,
     validate_profile,
     merge_profiles,
@@ -20,8 +20,7 @@ from IrintAI Assistant.plugins.personality_plugin.core.helpers import create_emp
     find_similar_profiles,
     export_profile_to_file,
     import_profile_from_file,
-    create_empty_profile
-)
+    create_empty_profile)
 
 # Package metadata
 __version__ = "1.0.0"

@@ -67,7 +67,10 @@ class SystemMonitor:
         )
         self.monitor_thread.start()
         self.log("[SystemMonitor] Started monitoring thread")
-        
+        # Emit initial stats for UI
+        if self.event_bus is not None:
+            self.event_bus.publish("system.stats_updated", self.get_system_info())
+
     def stop_monitoring(self):
         """Stop the monitoring thread"""
         self.running = False
@@ -626,27 +629,32 @@ class SystemMonitor:
             Dictionary of key values
         """
         result = {}
-        
         # Extract CPU usage
         if "cpu" in stats and "usage_percent" in stats["cpu"]:
-            result["cpu"] = stats["cpu"]["usage_percent"]
-            
+            try:
+                result["cpu"] = float(stats["cpu"]["usage_percent"])
+            except Exception:
+                pass
         # Extract RAM usage
         if "ram" in stats and "usage_percent" in stats["ram"]:
-            result["ram"] = stats["ram"]["usage_percent"]
-            
+            try:
+                result["ram"] = float(stats["ram"]["usage_percent"])
+            except Exception:
+                pass
         # Extract GPU usage
         if "gpu" in stats and "usage_percent" in stats["gpu"]:
             try:
-                if stats["gpu"]["usage_percent"] != "N/A":
-                    result["gpu"] = int(stats["gpu"]["usage_percent"].replace("%", ""))
-            except:
+                val = stats["gpu"]["usage_percent"]
+                if val != "N/A":
+                    result["gpu"] = int(str(val).replace("%", ""))
+            except Exception:
                 pass
-                
         # Extract disk usage
         if "disk" in stats and "usage_percent" in stats["disk"]:
-            result["disk"] = stats["disk"]["usage_percent"]
-            
+            try:
+                result["disk"] = float(stats["disk"]["usage_percent"])
+            except Exception:
+                pass
         return result
         
     def register_process_monitor(self, plugin_id: str, process_id: int, 

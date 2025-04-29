@@ -57,8 +57,7 @@ class MemoryDiagnostic:
             self.chat_history_path = os.path.join(project_root, "data/chat_history.json")
             self.vector_store_path = os.path.join(project_root, "data/vector_store")
             self.reflections_path = os.path.join(project_root, "data/reflections")
-            print(f"Error loading configuration: {e}")
-          # Try to initialize memory system but catch any exceptions
+            print(f"Error loading configuration: {e}")        # Try to initialize memory system but catch any exceptions
         try:
             # Get the model name from config instead of passing the entire config manager
             model_name = self.config_manager.get("memory", {}).get("embedding_model", "all-MiniLM-L6-v2")
@@ -67,6 +66,7 @@ class MemoryDiagnostic:
             self.memory_system_loaded = True
         except Exception as e:
             self.memory_system_loaded = False
+            self.memory_system = None  # Set to None to avoid AttributeError
             print(f"Error initializing memory system: {e}")
         
     def log(self, message):

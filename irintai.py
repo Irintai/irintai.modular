@@ -59,8 +59,8 @@ from utils import (
 # Import the new SettingsManager
 from core.settings_manager import SettingsManager
 
-# Import UI components
-from ui import MainWindow
+# Import UI components directly to avoid circular import
+from ui.main_window import MainWindow
 
 def setup_exception_handler(logger):
     """Set up global exception handler to log errors"""
@@ -253,6 +253,8 @@ def main():
             threading.Thread(target=delayed_plugin_loading, daemon=True).start()
         
         # Start the UI main loop
+        # --- INSTANTIATE MAIN WINDOW ---
+        main_window = MainWindow(root, core_system)
         root.mainloop()
         
         # Perform cleanup when the application exits

@@ -511,15 +511,22 @@ class PluginDiagnostic:
     def run_all_checks(self):
         """Run all plugin diagnostic checks"""
         self.log("Starting plugin diagnostics...")
-        start_time = time.time()
-        
-        # Run checks
-        self.check_plugin_directory()
-        self.check_plugin_manifests()
-        self.check_plugin_dependencies()
-        self.check_plugin_initialization()
-        self.check_plugin_configuration()
-        
-        elapsed_time = time.time() - start_time
-        self.log(f"Plugin diagnostics completed in {elapsed_time:.2f} seconds")
+        try:
+            # Explicitly import time module within the method to avoid name errors
+            import time
+            start_time = time.time()
+            
+            # Run checks
+            self.check_plugin_directory()
+            self.check_plugin_manifests()
+            self.check_plugin_dependencies()
+            self.check_plugin_initialization()
+            self.check_plugin_configuration()
+            
+            elapsed_time = time.time() - start_time
+            self.log(f"Plugin diagnostics completed in {elapsed_time:.2f} seconds")
+        except Exception as e:
+            self.log(f"Error running plugin diagnostics: {str(e)}")
+            import traceback
+            traceback.print_exc()
         return self.results

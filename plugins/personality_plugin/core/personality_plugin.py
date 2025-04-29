@@ -15,7 +15,7 @@ import time
 from typing import Dict, List, Any, Optional, Callable, Union
 
 # Import the configuration handler
-from IrintAI Assistant.plugins.personality_plugin.config_handler import ConfigHandler
+from plugins.personality_plugin.config_handler import ConfigHandler
 
 class PersonalityPlugin:
     """

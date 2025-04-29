@@ -22,7 +22,7 @@ from ui.panels.memory_panel import MemoryPanel
 from ui.panels.resource_monitor_panel import ResourceMonitorPanel
 from ui.panels.plugin_panel import PluginPanel
 from ui.panels.config_panel import ConfigPanel
-from log_viewer import LogViewer
+from ui.log_viewer import LogViewer
 from core.plugin_manager import PluginManager
 from plugins.plugin_config_panel import PluginConfigPanel
 from ui.dashboard import Dashboard

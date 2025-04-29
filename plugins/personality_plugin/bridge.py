@@ -438,13 +438,13 @@ class PersonalityBridge:
                     return content
                     
                 # Apply style transformations from helpers
-from IrintAI Assistant.plugins.personality_plugin.core.helpers import apply_style_transforms
+                from plugins.personality_plugin.core.helpers import apply_style_transforms
                 return apply_style_transforms(content, active_profile)
-                    
+                
             except Exception as e:
                 # Log error but return original content
                 if hasattr(self.core_system, "log"):
                     self.core_system.log(f"Error in message modifier: {e}", "ERROR")
                 return content
-                
+                    
         return message_modifier

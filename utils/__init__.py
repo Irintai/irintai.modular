@@ -2,8 +2,8 @@
 Utility modules for IrintAI Assistant
 """
 
-from IrintAI Assistant.utils.logger import IrintaiLogger
-from IrintAI Assistant.utils.system_monitor import SystemMonitor
+from utils.logger import IrintaiLogger
+from utils.system_monitor import SystemMonitor
 from file_operations.file_ops import FileOps
 from plugins.plugin_event_bus import EventBus
 from plugins.plugin_dependency_manager import DependencyManager
@@ -18,7 +18,7 @@ except ImportError:
 
 # Make the plugin settings fix available
 try:
-from IrintAI Assistant.plugins.plugin_settings_fix import fix_plugin_settings_panel
+    from plugins.plugin_settings_fix import fix_plugin_settings_panel
 except ImportError:
     # This is fine if the file doesn't exist
     pass

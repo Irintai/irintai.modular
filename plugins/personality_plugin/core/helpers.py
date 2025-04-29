@@ -25,8 +25,8 @@ def load_default_profiles() -> Dict[str, Any]:
         try:
             with open(resource_path, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error loading default profiles: {e}")
     
     # Fallback to hardcoded defaults
     return {
@@ -44,15 +44,96 @@ def load_default_profiles() -> Dict[str, Any]:
                 "creativity": 0.5,
                 "complexity": 0.5,
                 "empathy": 0.5,
-                "directness": 0.5
+                "directness": 0.5,
+                "humor": 0.5,
+                "enthusiasm": 0.5,
+                "conciseness": 0.5
             },
             "formatting": {
                 "emphasize_key_points": False,
                 "use_markdown": True,
                 "paragraph_structure": "standard"
-            }
+            },
+            "text_replacements": {}
         },
-        # [Include other default profiles]
+        "Friendly": {
+            "name": "Friendly",
+            "description": "Warm and conversational communication style",
+            "tags": ["warm", "casual", "conversational"],
+            "author": "Irintai",
+            "version": "1.0.0",
+            "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "prefix": "Hey there! ",
+            "suffix": "",
+            "style_modifiers": {
+                "formality": 0.3,
+                "creativity": 0.6,
+                "complexity": 0.4,
+                "empathy": 0.8,
+                "directness": 0.6,
+                "humor": 0.7,
+                "enthusiasm": 0.8,
+                "conciseness": 0.5
+            },
+            "formatting": {
+                "emphasize_key_points": True,
+                "use_markdown": True,
+                "paragraph_structure": "conversational"
+            },
+            "text_replacements": {}
+        },
+        "Professional": {
+            "name": "Professional",
+            "description": "Formal and business-oriented communication style",
+            "tags": ["formal", "business", "expert"],
+            "author": "Irintai",
+            "version": "1.0.0",
+            "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "prefix": "",
+            "suffix": "",
+            "style_modifiers": {
+                "formality": 0.9,
+                "creativity": 0.4,
+                "complexity": 0.7,
+                "empathy": 0.5,
+                "directness": 0.8,
+                "humor": 0.2,
+                "enthusiasm": 0.5,
+                "conciseness": 0.7
+            },
+            "formatting": {
+                "emphasize_key_points": True,
+                "use_markdown": True,
+                "paragraph_structure": "structured"
+            },
+            "text_replacements": {}
+        },
+        "Creative": {
+            "name": "Creative",
+            "description": "Imaginative and expressive communication style",
+            "tags": ["creative", "expressive", "imaginative"],
+            "author": "Irintai",
+            "version": "1.0.0",
+            "created": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "prefix": "",
+            "suffix": "",
+            "style_modifiers": {
+                "formality": 0.4,
+                "creativity": 0.9,
+                "complexity": 0.6,
+                "empathy": 0.7,
+                "directness": 0.4,
+                "humor": 0.7,
+                "enthusiasm": 0.8,
+                "conciseness": 0.3
+            },
+            "formatting": {
+                "emphasize_key_points": True,
+                "use_markdown": True,
+                "paragraph_structure": "creative"
+            },
+            "text_replacements": {}
+        }
     }
 
 def get_profile_metadata(profile: Dict[str, Any]) -> Dict[str, Any]:

@@ -15,6 +15,7 @@ import re
 import time
 import pkg_resources
 from typing import Dict, Any, Optional, Callable, List, Type, Union
+from plugins.ollama_hub.core.ollama_client import OllamaClient
 
 class PluginDependencyError(Exception):
     """
@@ -333,7 +334,7 @@ class IrintaiPlugin:
         Set up plugin-specific resources
         """
         # Import UI components to register
-from IrintAI Assistant.plugins.ollama_hub.ui.ollama_tab import OllamaHubTab
+        from plugins.ollama_hub.ui.ollama_tab import OllamaHubTab
         
         # Store UI components for activation
         self.ui_components["ollama_tab"] = OllamaHubTab
@@ -356,15 +357,12 @@ from IrintAI Assistant.plugins.ollama_hub.ui.ollama_tab import OllamaHubTab
                     self.ollama_client = OllamaClient(logger=self.log)
                     self.log("Created ollama client from core module", "INFO")
                 else:
-                    # Fall back to our own implementation
-from IrintAI Assistant.plugins.ollama_hub.core.ollama_client import OllamaClient
                     self.ollama_client = OllamaClient(logger=self.log)
                     self.log("Created ollama client from plugin module", "INFO")
             except ImportError as e:
                 self.log(f"ImportError when creating ollama client: {e}", "ERROR")
                 # Create our own client as last resort
                 try:
-from IrintAI Assistant.plugins.ollama_hub.core.ollama_client import OllamaClient
                     self.ollama_client = OllamaClient(logger=self.log)
                     self.log("Created ollama client from plugin module (fallback)", "INFO")
                 except ImportError as e2:
@@ -905,5 +903,4 @@ plugin_info = {
     "plugin_class": IrintaiPlugin,
     "compatibility": "1.0.0",
     "dependencies": [],
-    "tags": ["ollama", "models", "hub", "download"]
-}
+    "tags": ["ollama", "models", "hub", "download"]}

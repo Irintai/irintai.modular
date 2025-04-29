@@ -1,9 +1,9 @@
 """
 Personality Plugin for Irintai Assistant
 """
-from IrintAI Assistant.plugins.personality_plugin.core.personality_plugin import PersonalityPlugin
-from IrintAI Assistant.plugins.personality_plugin.ui.panel import Panel
-from IrintAI Assistant.plugins.personality_plugin.config_handler import ConfigHandler
+from plugins.personality_plugin.core.personality_plugin import PersonalityPlugin
+from plugins.personality_plugin.ui.panel import Panel
+from plugins.personality_plugin.config_handler import ConfigHandler
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox, filedialog
 import threading
@@ -163,7 +163,7 @@ class IrintaiPlugin:
             Returns:
                 The activated UI panel
             """
-from IrintAI Assistant.plugins.personality_plugin.ui import activate_ui as ui_activator
+from plugins.personality_plugin.ui import activate_ui as ui_activator
             return ui_activator(container)
 
     # Add these methods to the IrintaiPlugin class to complete the implementation:
@@ -308,7 +308,7 @@ from IrintAI Assistant.plugins.personality_plugin.ui import activate_ui as ui_ac
             Plugin instance
         """
         # Import the bridge
-from IrintAI Assistant.plugins.personality_plugin.bridge import PersonalityBridge
+from plugins.personality_plugin.bridge import PersonalityBridge
         
         # Apply compatibility bridge
         bridge = PersonalityBridge(core_system)
@@ -469,7 +469,7 @@ from IrintAI Assistant.plugins.personality_plugin.bridge import PersonalityBridg
             return
             
         # Get bridge to handle system prompt modification
-from IrintAI Assistant.plugins.personality_plugin.bridge import PersonalityBridge
+from plugins.personality_plugin.bridge import PersonalityBridge
         bridge = PersonalityBridge(self._chat_panel.parent)
         bridge.ensure_compatibility()
         
@@ -526,7 +526,7 @@ from IrintAI Assistant.plugins.personality_plugin.bridge import PersonalityBridg
                 return None
                 
             # Apply style transformation
-from IrintAI Assistant.plugins.personality_plugin.core.helpers import apply_style_transforms
+from plugins.personality_plugin.core.helpers import apply_style_transforms
             return apply_style_transforms(content, active_profile)
                 
         except Exception as e:

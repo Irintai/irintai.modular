@@ -1440,3 +1440,15 @@ class ModelManager:
         except Exception as e:
             self.log(f"[Error] Failed to list models: {e}")
             return False, {"error": str(e)}
+    
+    def get_available_models(self) -> list:
+        """
+        Return a list of available model names (for UI compatibility).
+        """
+        try:
+            # Try to get all available models (installed and remote)
+            models = self.fetch_available_models()
+            return [m["name"] for m in models if "name" in m]
+        except Exception as e:
+            self.log(f"[Error] get_available_models failed: {e}")
+            return []
