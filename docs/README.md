@@ -1,4 +1,4 @@
-# Irintai Assistant
+# IrintAI Assistant
 
 A local-first AI assistant for chat interactions, vector memory, and knowledge management.
 
@@ -6,7 +6,7 @@ A local-first AI assistant for chat interactions, vector memory, and knowledge m
 
 ## Overview
 
-Irintai Assistant is a desktop application that provides an interface for interacting with local AI language models through Ollama. It features a chat interface, vector-based memory system, plugin support, and comprehensive model management capabilities—all while keeping your data private and on your own hardware.
+IrintAI Assistant is a desktop application that provides an interface for interacting with local AI language models through Ollama. It features a chat interface, vector-based memory system, plugin support, and comprehensive model management capabilities—all while keeping your data private and on your own hardware.
 
 ## Features
 
