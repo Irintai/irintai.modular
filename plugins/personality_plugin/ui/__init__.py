@@ -2,7 +2,7 @@
 UI Components for the Personality Plugin
 """
 
-from .panel import Panel
+from plugins.personality_plugin.ui.panel import Panel
 
 # Export the class at the package level
 __all__ = ['Panel']
@@ -18,8 +18,8 @@ def activate_ui(container):
     Returns:
         The created panel
     """
-    from ..core import PersonalityPlugin
-    from .panel import Panel
+    from plugins.personality_plugin.core import PersonalityPlugin
+    from plugins.personality_plugin.ui.panel import Panel
     
     # Get plugin instance from plugin manager
     plugin_manager = container.master.plugin_manager

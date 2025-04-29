@@ -1,90 +1,96 @@
 """
-Runtime Attribute Patching - Dynamically add missing attributes to objects
-This module helps prevent AttributeError crashes by ensuring required methods exist
+Runtime patching utilities for Irintai Assistant.
+
+This module provides functions to patch and modify components at runtime,
+enabling dynamic behavior modification and fixes without requiring restarts.
 """
 
-import logging
 import inspect
-from typing import Any, Dict, Callable, Optional
+import logging
+import types
+import functools
 
-logger = logging.getLogger(__name__)
-
-
-def ensure_attribute_exists(obj: Any, attr_name: str, default_value: Any = None) -> bool:
+def patch_method(instance, method_name, new_method):
     """
-    Ensure an attribute exists on an object by adding it if it doesn't.
+    Replace a method on an instance with a new implementation.
     
     Args:
-        obj: The object to check
-        attr_name: Name of the attribute to ensure exists
-        default_value: Value to set if attribute doesn't exist
+        instance: The object instance to patch
+        method_name: Name of the method to replace
+        new_method: New method implementation
         
     Returns:
-        True if attribute was added, False if it already existed
+        The original method or None if method didn't exist
     """
-    if not hasattr(obj, attr_name):
-        setattr(obj, attr_name, default_value)
-        return True
-    return False
+    if not hasattr(instance, method_name):
+        logging.warning(f"Cannot patch {method_name}: method does not exist")
+        return None
+        
+    original_method = getattr(instance, method_name)
+    setattr(instance, method_name, types.MethodType(new_method, instance))
+    return original_method
 
-
-def ensure_method_exists(obj: Any, method_name: str, 
-                         default_implementation: Optional[Callable] = None) -> bool:
+def ensure_method_exists(instance, method_name, default_implementation):
     """
-    Ensure a method exists on an object by adding it if it doesn't.
+    Ensure a method exists on an instance, adding it if missing.
     
     Args:
-        obj: The object to check
+        instance: The object instance to check/modify
         method_name: Name of the method to ensure exists
-        default_implementation: Function to use as the method implementation
+        default_implementation: Function to use if method is missing
         
     Returns:
         True if method was added, False if it already existed
     """
-    if not hasattr(obj, method_name):
-        if default_implementation is None:
-            # Create a no-op function with the same name
-            def noop_method(*args, **kwargs):
-                method_obj = args[0].__class__.__name__
-                logger.warning(f"Called missing method '{method_name}' on {method_obj}")
-                return None
-                
-            default_implementation = noop_method
-            
-        setattr(obj, method_name, default_implementation.__get__(obj, obj.__class__))
-        return True
-    return False
+    if hasattr(instance, method_name):
+        return False
+        
+    setattr(instance, method_name, types.MethodType(default_implementation, instance))
+    return True
 
-
-def patch_plugin_manager(plugin_manager):
+def create_patched_class(original_class, patches=None, additions=None):
     """
-    Add commonly missing attributes to the PluginManager class
+    Create a patched subclass of an original class.
     
     Args:
-        plugin_manager: The plugin manager instance to patch
-    """
-    # Ensure error_handler attribute exists
-    ensure_attribute_exists(plugin_manager, 'error_handler', None)
-    
-    # Add set_error_handler method if missing
-    def set_error_handler_impl(self, handler_func):
-        """Set a function to handle plugin errors"""
-        self.error_handler = handler_func
+        original_class: The class to patch
+        patches: Dict mapping method names to new implementations
+        additions: Dict mapping new method names to implementations
         
-    ensure_method_exists(plugin_manager, 'set_error_handler', set_error_handler_impl)
+    Returns:
+        A new subclass with the specified modifications
+    """
+    patches = patches or {}
+    additions = additions or {}
     
-    # Add commonly used methods if they're missing
-    critical_methods = {
-        'discover_plugins': lambda self: [],
-        'load_plugin': lambda self, plugin_name: False,
-        'activate_plugin': lambda self, plugin_name: False,
-        'deactivate_plugin': lambda self, plugin_name: False,
-        'unload_plugin': lambda self, plugin_name: False,
-        'unload_all_plugins': lambda self: None,
-        'auto_load_plugins': lambda self: None,
-    }
+    class PatchedClass(original_class):
+        pass
     
-    for method_name, default_impl in critical_methods.items():
-        ensure_method_exists(plugin_manager, method_name, default_impl)
+    # Apply patches by overriding methods
+    for method_name, new_implementation in patches.items():
+        if hasattr(original_class, method_name):
+            setattr(PatchedClass, method_name, new_implementation)
     
-    return plugin_manager
+    # Add new methods
+    for method_name, implementation in additions.items():
+        setattr(PatchedClass, method_name, implementation)
+    
+    return PatchedClass
+
+def monkey_patch_module(module, patches):
+    """
+    Apply patches to a module.
+    
+    Args:
+        module: The module to patch
+        patches: Dict mapping attribute names to new values
+        
+    Returns:
+        The number of successfully applied patches
+    """
+    count = 0
+    for attr_name, new_value in patches.items():
+        if hasattr(module, attr_name):
+            setattr(module, attr_name, new_value)
+            count += 1
+    return count

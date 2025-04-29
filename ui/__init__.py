@@ -2,18 +2,17 @@
 UI module initialization for Irintai assistant
 """
 # Import all UI components for easy access
-from .main_window import MainWindow
-from .chat_panel import ChatPanel
-from .model_panel import ModelPanel
-from .memory_panel import MemoryPanel
-from .config_panel import ConfigPanel
-from .log_viewer import LogViewer
-from .plugin_panel import PluginPanel
-from .resource_monitor_panel import ResourceMonitorPanel
-from .plugin_config_panel import PluginConfigPanel
+from ui.panels.chat_panel import ChatPanel
+from ui.panels.model_panel import ModelPanel
+from ui.panels.memory_panel import MemoryPanel
+from ui.panels.config_panel import ConfigPanel
+from ui.log_viewer import LogViewer
+from ui.panels.plugin_panel import PluginPanel
+from ui.panels.resource_monitor_panel import ResourceMonitorPanel
+from plugins.plugin_config_panel import PluginConfigPanel
+# Avoid circular imports - main_window is imported directly in irintai.py
 
 __all__ = [
-    'MainWindow',
     'ChatPanel',
     'ModelPanel',
     'MemoryPanel',
@@ -21,5 +20,9 @@ __all__ = [
     'LogViewer',
     'PluginPanel',
     'ResourceMonitorPanel',
-    'PluginConfigPanel'
-]
+    'PluginConfigPanel']
+
+# Added to resolve circular import
+def _lazy_import():
+    from ui.main_window import MainWindow  # Moved to avoid circular import
+    pass

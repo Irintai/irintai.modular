@@ -67,7 +67,10 @@ class SystemMonitor:
         )
         self.monitor_thread.start()
         self.log("[SystemMonitor] Started monitoring thread")
-        
+        # Emit initial stats for UI
+        if self.event_bus is not None:
+            self.event_bus.publish("system.stats_updated", self.get_system_info())
+
     def stop_monitoring(self):
         """Stop the monitoring thread"""
         self.running = False
@@ -98,7 +101,7 @@ class SystemMonitor:
                 self._update_custom_metrics()
                 
                 # Emit system stats event
-                if self.event_bus:
+                if self.event_bus is not None:
                     self.event_bus.publish("system.stats_updated", system_stats)
                     
             except Exception as e:
@@ -502,7 +505,7 @@ class SystemMonitor:
                                        last_value > critical_threshold >= value))
                     
                     # Emit event if significant change
-                    if (significant_change or crossed_warning or crossed_critical) and self.event_bus:
+                    if (significant_change or crossed_warning or crossed_critical) and self.event_bus is not None:
                         event_data = {
                             "plugin_id": metric["plugin_id"],
                             "metric_id": metric["metric_id"],
@@ -516,13 +519,13 @@ class SystemMonitor:
                         self.event_bus.publish("system.metric_changed", event_data)
                         
                         # Also emit specific events for threshold crossings
-                        if crossed_warning:
+                        if crossed_warning and self.event_bus is not None:
                             if value > warning_threshold:
                                 self.event_bus.publish("system.metric_warning", event_data)
                             else:
                                 self.event_bus.publish("system.metric_warning_resolved", event_data)
                                 
-                        if crossed_critical:
+                        if crossed_critical and self.event_bus is not None:
                             if value > critical_threshold:
                                 self.event_bus.publish("system.metric_critical", event_data)
                             else:
@@ -564,7 +567,7 @@ class SystemMonitor:
             # Check for significant change (5% or more)
             if abs(value - prev_value) >= 5:
                 # Emit event if event bus is available
-                if self.event_bus:
+                if self.event_bus is not None:
                     event_data = {
                         "metric": key,
                         "value": value,
@@ -626,27 +629,32 @@ class SystemMonitor:
             Dictionary of key values
         """
         result = {}
-        
         # Extract CPU usage
         if "cpu" in stats and "usage_percent" in stats["cpu"]:
-            result["cpu"] = stats["cpu"]["usage_percent"]
-            
+            try:
+                result["cpu"] = float(stats["cpu"]["usage_percent"])
+            except Exception:
+                pass
         # Extract RAM usage
         if "ram" in stats and "usage_percent" in stats["ram"]:
-            result["ram"] = stats["ram"]["usage_percent"]
-            
+            try:
+                result["ram"] = float(stats["ram"]["usage_percent"])
+            except Exception:
+                pass
         # Extract GPU usage
         if "gpu" in stats and "usage_percent" in stats["gpu"]:
             try:
-                if stats["gpu"]["usage_percent"] != "N/A":
-                    result["gpu"] = int(stats["gpu"]["usage_percent"].replace("%", ""))
-            except:
+                val = stats["gpu"]["usage_percent"]
+                if val != "N/A":
+                    result["gpu"] = int(str(val).replace("%", ""))
+            except Exception:
                 pass
-                
         # Extract disk usage
         if "disk" in stats and "usage_percent" in stats["disk"]:
-            result["disk"] = stats["disk"]["usage_percent"]
-            
+            try:
+                result["disk"] = float(stats["disk"]["usage_percent"])
+            except Exception:
+                pass
         return result
         
     def register_process_monitor(self, plugin_id: str, process_id: int, 
@@ -812,7 +820,7 @@ class SystemMonitor:
                     self.unregister_process_monitor(plugin_id, process_id)
                     
                     # Emit event if event bus is available
-                    if self.event_bus:
+                    if self.event_bus is not None:
                         event_data = {
                             "plugin_id": plugin_id,
                             "process_id": process_id,

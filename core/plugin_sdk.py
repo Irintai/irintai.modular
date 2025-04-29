@@ -30,7 +30,7 @@ class PluginSDK:
         # Initialize sandboxed file operations
         self.file_ops = None
         if hasattr(core_system, 'file_ops'):
-            from utils.file_ops import PluginSandboxedFileOps
+            from file_operations.file_ops import PluginSandboxedFileOps
             self.file_ops = PluginSandboxedFileOps(
                 core_system.file_ops, 
                 plugin_id, 

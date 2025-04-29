@@ -47,19 +47,25 @@ class ChatEngine:
         """
         self.system_prompt = prompt
         self.log(f"[System Prompt] Applied: {prompt}")
-        
-    def set_memory_mode(self, mode: str) -> None:
+    def set_memory_mode(self, enabled=True, auto=False, background=False) -> None:
         """
         Set the memory mode
         
         Args:
-            mode: Memory mode (Off, Manual, Auto, Background)
+            enabled: Whether memory is enabled
+            auto: Whether to automatically use memory
+            background: Whether to run memory processing in background
         """
-        if mode in ["Off", "Manual", "Auto", "Background"]:
-            self.memory_mode = mode
-            self.log(f"[Memory Mode] Set to: {mode}")
-        else:
-            self.log(f"[Memory Mode Error] Invalid mode: {mode}")
+        if not enabled:
+            self.memory_mode = "off"
+        elif enabled and not auto:
+            self.memory_mode = "manual"
+        elif enabled and auto and not background:
+            self.memory_mode = "auto"
+        elif enabled and auto and background:
+            self.memory_mode = "background"
+            
+        self.log(f"[Memory Mode] Set to: {self.memory_mode.capitalize()}")
         
     def format_prompt(self, prompt: str, model_name: str) -> str:
         """
@@ -184,7 +190,7 @@ class ChatEngine:
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
         }
         self.chat_history.append(message)
-        
+    
     def send_message(self, content: str, on_response: Optional[Callable] = None) -> str:
         """
         Send a message and get a response
@@ -200,21 +206,34 @@ class ChatEngine:
         self.add_user_message(content)
         
         # Check if model is running
-        if not self.model_manager.model_process or self.model_manager.model_process.poll() is not None:
+        if not self.model_manager.current_model:
             error_msg = "Model is not running. Please start a model first."
             self.log(f"[Error] {error_msg}")
             return error_msg
         
-        # Format the prompt
-        model_name = self.model_manager.current_model
-        formatted_prompt = self.format_prompt(content, model_name)
-        
-        # Send to model
-        self.log(f"[Prompt] Sending to model: {content[:100]}...")
-        success, response = self.model_manager.send_prompt(
-            content, 
-            lambda p: self.format_prompt(p, model_name)
-        )
+        try:
+            # Import the OllamaClient
+            from plugins.ollama_hub.core.ollama_client import OllamaClient
+            
+            # Create a client with our logger
+            ollama = OllamaClient(logger=self.log)
+            
+            # Format the prompt
+            model_name = self.model_manager.current_model
+            formatted_prompt = self.format_prompt(content, model_name)
+            
+            # Get model parameters if available
+            params = getattr(self.model_manager, 'current_parameters', {})
+            
+            # Log that we're sending the prompt
+            self.log(f"[Prompt] Sending to model: {content[:100]}...")
+            
+            # Send to model using direct Ollama API
+            success, response = ollama.generate(model_name, formatted_prompt, params)
+        except Exception as e:
+            success = False
+            response = f"Error occurred: {str(e)}"
+            self.log(f"[Error] Exception while generating response: {e}")
         
         if success and response:
             # Add assistant message to history

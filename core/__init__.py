@@ -1,9 +1,9 @@
-from .model_manager import ModelManager
-from .chat_engine import ChatEngine
-from .memory_system import MemorySystem
-from .config_manager import ConfigManager
-from .plugin_manager import PluginManager
-from .plugin_sdk import PluginSDK
+from core.model_manager import ModelManager
+from core.chat_engine import ChatEngine
+from core.memory_system import MemorySystem
+from core.config_manager import ConfigManager
+from core.plugin_manager import PluginManager
+from core.plugin_sdk import PluginSDK
 
 __all__ = [
     'ModelManager',
@@ -11,5 +11,4 @@ __all__ = [
     'MemorySystem',
     'ConfigManager',
     'PluginManager',
-    'PluginSDK'
-]
+    'PluginSDK']

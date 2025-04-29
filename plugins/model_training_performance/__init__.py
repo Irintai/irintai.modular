@@ -4,7 +4,7 @@ Model Training Performance Plugin - Entry Point
 """
 
 # Import the core plugin class
-from .core.model_training_performance import IrintaiPlugin as CorePlugin
+from plugins.model_training_performance.core.model_training_performance import IrintaiPlugin as CorePlugin
 
 # Define plugin metadata (can be copied or referenced from the core class if static)
 METADATA = {

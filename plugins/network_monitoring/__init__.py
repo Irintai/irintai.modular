@@ -3,7 +3,7 @@ Network Monitoring Plugin - Entry Point
 """
 
 # Import the core plugin class
-from .core.network_monitoring import IrintaiPlugin as CorePlugin
+from plugins.network_monitoring.core.network_monitoring import IrintaiPlugin as CorePlugin
 
 # Define plugin metadata (can be copied or referenced from the core class if static)
 METADATA = {

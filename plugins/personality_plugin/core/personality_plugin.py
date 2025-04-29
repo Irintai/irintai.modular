@@ -14,6 +14,9 @@ import threading
 import time
 from typing import Dict, List, Any, Optional, Callable, Union
 
+# Import the configuration handler
+from plugins.personality_plugin.config_handler import ConfigHandler
+
 class PersonalityPlugin:
     """
     Core implementation of the Personality Plugin
@@ -175,27 +178,20 @@ class PersonalityPlugin:
             **kwargs: Additional configuration parameters
         """
         try:
-            # Check if configuration file exists
-            if os.path.exists(self._config_path):
-                with open(self._config_path, 'r', encoding='utf-8') as f:
-                    self._config = json.load(f)
-                    self._logger("Configuration loaded successfully", "INFO")
-            else:
-                # Create default configuration
-                self._config = {
-                    "active_profile": None,
-                    "profiles": {},
-                    "auto_remember": True
-                }
-                self._logger("Created default configuration", "INFO")
+            # Use the ConfigHandler to load configuration
+            self._config_handler = ConfigHandler(self._config_path, logger=self._logger)
+            self._config = self._config_handler.load()
             
             # Update with any provided kwargs
             for key, value in kwargs.items():
                 if key in self._config:
                     self._config[key] = value
             
-            # Save configuration
-            self._save_configuration()
+            # Save configuration with updates
+            if kwargs:
+                self._save_configuration()
+                
+            self._logger("Configuration loaded successfully", "INFO")
         
         except Exception as e:
             self._logger(f"Configuration loading error: {e}", "ERROR")
@@ -211,13 +207,135 @@ class PersonalityPlugin:
         Save the current configuration to disk
         """
         try:
-            with open(self._config_path, 'w', encoding='utf-8') as f:
-                json.dump(self._config, f, indent=2)
-                
-            self._logger("Configuration saved successfully", "INFO")
+            # Use the ConfigHandler to save configuration
+            if hasattr(self, '_config_handler'):
+                success = self._config_handler.save()
+                if success:
+                    self._logger("Configuration saved successfully", "INFO")
+                else:
+                    self._logger("Failed to save configuration", "WARNING")
+            else:
+                # Fallback to direct file saving if config handler isn't available
+                with open(self._config_path, 'w', encoding='utf-8') as f:
+                    json.dump(self._config, f, indent=2)
+                self._logger("Configuration saved successfully (direct)", "INFO")
         except Exception as e:
             self._logger(f"Failed to save configuration: {e}", "ERROR")
     
+    # Helper methods for accessing configuration and profiles
+    def get_active_profile_name(self) -> Optional[str]:
+        """
+        Get the name of the currently active profile
+        
+        Returns:
+            Name of active profile or None
+        """
+        return self._config.get("active_profile")
+        
+    def get_active_profile(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the currently active profile data
+        
+        Returns:
+            Active profile data dictionary or None
+        """
+        active_name = self.get_active_profile_name()
+        if active_name and active_name in self._config.get("profiles", {}):
+            return self._config["profiles"][active_name]
+        return None
+        
+    def get_available_profiles(self) -> List[str]:
+        """
+        Get a list of all available profile names
+        
+        Returns:
+            List of profile names
+        """
+        return list(self._config.get("profiles", {}).keys())
+        
+    def get_profile(self, profile_name: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific profile by name
+        
+        Args:
+            profile_name: Name of profile to retrieve
+            
+        Returns:
+            Profile data dictionary or None
+        """
+        if profile_name in self._config.get("profiles", {}):
+            return self._config["profiles"][profile_name]
+        return None
+        
+    def set_active_profile(self, profile_name: str) -> bool:
+        """
+        Set the active profile by name
+        
+        Args:
+            profile_name: Name of profile to activate
+            
+        Returns:
+            Success flag
+        """
+        if profile_name in self._config.get("profiles", {}):
+            self._config["active_profile"] = profile_name
+            self._save_configuration()
+            self._logger(f"Active profile set to: {profile_name}", "INFO")
+            return True
+        else:
+            self._logger(f"Failed to set active profile: {profile_name} not found", "ERROR")
+            return False
+    
+    def get_auto_remember_setting(self) -> bool:
+        """
+        Get the auto-remember setting
+        
+        Returns:
+            Auto-remember setting
+        """
+        return self._config.get("auto_remember", True)
+        
+    def set_auto_remember(self, value: bool) -> None:
+        """
+        Set the auto-remember setting
+        
+        Args:
+            value: New auto-remember setting
+        """
+        self._config["auto_remember"] = bool(value)
+        self._save_configuration()
+        
+    def get_config(self) -> Dict[str, Any]:
+        """
+        Get the full configuration
+        
+        Returns:
+            Complete configuration dictionary
+        """
+        return self._config
+        
+    def set_config(self, key: str, value: Any) -> None:
+        """
+        Set a specific configuration value
+        
+        Args:
+            key: Configuration key
+            value: Configuration value
+        """
+        # Support nested keys with dot notation
+        if "." in key:
+            parts = key.split(".")
+            config = self._config
+            for part in parts[:-1]:
+                if part not in config:
+                    config[part] = {}
+                config = config[part]
+            config[parts[-1]] = value
+        else:
+            self._config[key] = value
+            
+        self._save_configuration()
+
     def _create_default_profiles(self) -> None:
         """
         Create default personality profiles

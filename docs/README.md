@@ -14,6 +14,7 @@ Irintai Assistant is a desktop application that provides an interface for intera
 - **Chat Interface**: Clean, intuitive interface for conversations with AI models
 - **Vector Memory**: Store and retrieve documents with semantic search capabilities
 - **Model Management**: Download, manage, and switch between different AI models
+- **Plugin System**: Extend functionality with modular plugins
 - **System Configuration**: Comprehensive settings for customizing behavior
 - **Performance Monitoring**: Real-time monitoring of system resources
 - **Configurable Prompting**: System prompts, memory usage, and more
@@ -66,44 +67,65 @@ The application can be configured through the Settings tab or by editing `data/c
 ## Project Structure
 
 ```
-# Irintai: Refactored Project Structure
+# Irintai Assistant Project Structure
 
-```
 irintai/
 │
-├── irintai.py                  # Main entry point
+├── irintai.py                    # Main entry point
 │
-├── core/                       # Core functionality
+├── core/                         # Core functionality
 │   ├── __init__.py
-│   ├── model_manager.py        # Ollama model management
-│   ├── chat_engine.py          # Conversation logic
-│   ├── memory_system.py        # Embedding and retrieval logic
-│   └── config_manager.py       # Application settings management
+│   ├── model_manager.py          # Ollama model management
+│   ├── chat_engine.py            # Conversation logic
+│   ├── memory_system.py          # Embedding and retrieval logic
+│   ├── config_manager.py         # Application settings management
+│   ├── plugin_manager.py         # Plugin discovery and management
+│   └── plugin_sdk.py             # Plugin development SDK
 │
-├── ui/                         # UI components
+├── ui/                           # UI components
 │   ├── __init__.py
-│   ├── main_window.py          # Main application window
-│   ├── chat_panel.py           # Chat display and interaction
-│   ├── model_panel.py          # Model management UI
-│   ├── memory_panel.py         # Memory and embedding UI
-│   ├── config_panel.py         # Configuration UI
-│   └── log_viewer.py           # Enhanced log viewer
+│   ├── main_window.py            # Main application window
+│   ├── chat_panel.py             # Chat display and interaction
+│   ├── model_panel.py            # Model management UI
+│   ├── memory_panel.py           # Memory and embedding UI
+│   ├── config_panel.py           # Configuration UI
+│   ├── plugin_panel.py           # Plugin management interface
+│   ├── plugin_config_panel.py    # Plugin configuration 
+│   ├── resource_monitor_panel.py # System resource monitoring
+│   └── log_viewer.py             # Enhanced log viewer
 │
-├── utils/                      # Utility functions
+├── utils/                        # Utility functions
 │   ├── __init__.py
-│   ├── logger.py               # Enhanced logging functionality
-│   ├── system_info.py          # System monitoring utilities
-│   └── file_ops.py             # File operations helpers
+│   ├── logger.py                 # Enhanced logging functionality
+│   ├── system_monitor.py         # System monitoring utilities
+│   ├── file_ops.py               # File operations helpers
+│   ├── plugin_event_bus.py       # Plugin communication system
+│   ├── plugin_dependency_manager.py # Plugin dependency handling
+│   └── ollama_hub_integrator.py  # Ollama integration utilities
 │
-├── data/                       # Data storage
-│   ├── models/                 # Default model storage location
-│   ├── logs/                   # Log files
-│   ├── reflections/            # Session reflections
-│   └── vector_store/           # Vector embeddings
+├── plugins/                      # Plugin directory
+│   ├── ollama_hub/               # Ollama Hub integration plugin
+│   ├── model_training_performance/ # Model performance plugin
+│   ├── network_monitoring/       # Network monitoring plugin
+│   └── personality_plugin/       # Personality customization
 │
-└── resources/                  # Application resources
-    ├── presets/                # System prompt presets
-    └── icons/                  # UI icons
+├── diagnostics/                  # Diagnostic tools
+│   ├── enhanced_diagnostics.py   # System diagnostic utility
+│   └── ollama_panel_diagnostic.py # Ollama-specific diagnostics
+│
+├── data/                         # Data storage
+│   ├── models/                   # Default model storage location
+│   ├── logs/                     # Log files
+│   ├── plugins/                  # Plugin configurations
+│   ├── reflections/              # Session reflections
+│   └── vector_store/             # Vector embeddings
+│
+└── docs/                         # Documentation
+    ├── README.md                 # This file
+    ├── USAGE_GUIDE.md            # Detailed usage instructions
+    ├── TROUBLESHOOTING.md        # Troubleshooting information
+    ├── plugin_api.md             # Plugin development guide
+    └── resources/                # Documentation resources
 ```
 
 ## Memory System

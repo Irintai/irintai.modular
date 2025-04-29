@@ -301,6 +301,7 @@ class PluginManager:
                 
                 # Initialize plugin instance
                 plugin_instance = plugin_class(
+                    plugin_id=plugin_name,  # Pass plugin name as the plugin_id
                     core_system=self.core_system,
                     config_path=config_path,
                     logger=self.log
@@ -980,3 +981,43 @@ class PluginManager:
             self.log(f"[Plugin] Failed to check updates for {plugin_name}: {e}")
             
         return result
+    
+    def set_plugin_config(self, plugin_id: str, config_data: Dict[str, Any]) -> bool:
+        """
+        Update a plugin's configuration
+        
+        Args:
+            plugin_id: Unique identifier for the plugin
+            config_data: Dictionary containing configuration settings
+            
+        Returns:
+            True if configuration updated successfully, False otherwise
+        """
+        if plugin_id not in self.plugins:
+            self.log(f"[Plugin Manager] Cannot set config for unknown plugin: {plugin_id}")
+            return False
+            
+        try:
+            # Get the plugin instance
+            plugin_instance = self.plugins[plugin_id].get("instance")
+            if not plugin_instance:
+                self.log(f"[Plugin Manager] Plugin not loaded: {plugin_id}")
+                return False
+                
+            # Update the plugin's configuration
+            if hasattr(plugin_instance, "set_config"):
+                plugin_instance.set_config(config_data)
+                
+            # Save the configuration to file
+            config_file = os.path.join(self.config_dir, f"{plugin_id}.json")
+            os.makedirs(os.path.dirname(config_file), exist_ok=True)
+            
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(config_data, f, indent=2)
+                
+            self.log(f"[Plugin Manager] Updated configuration for {plugin_id}")
+            return True
+            
+        except Exception as e:
+            self.log(f"[Plugin Manager] Failed to update config for {plugin_id}: {e}")
+            return False
